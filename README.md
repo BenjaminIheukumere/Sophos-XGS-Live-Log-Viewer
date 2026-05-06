@@ -109,7 +109,9 @@ Filter presets are JSON files with the extension `.sxlv-filter.json`. They conta
 
 ## Incident captures
 
-The Capture button writes a ZIP under:
+The Capture button exports rows received by the app during the selected recent window. It intentionally uses app receive time instead of the firewall event timestamp, so captures still work when the appliance clock differs or old initial rows are loaded.
+
+Capture ZIPs are written under:
 
 ```text
 %USERPROFILE%\Documents\Sophos XGS Live Log Viewer\Captures

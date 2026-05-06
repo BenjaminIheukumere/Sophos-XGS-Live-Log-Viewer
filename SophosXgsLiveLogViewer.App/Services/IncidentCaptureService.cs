@@ -42,8 +42,8 @@ public static partial class IncidentCaptureService
         try
         {
             var orderedEntries = entries
-                .Where(entry => entry.OccurredAt >= windowStart && entry.OccurredAt <= capturedAt)
-                .OrderBy(entry => entry.OccurredAt)
+                .Where(entry => entry.ReceivedAt >= windowStart && entry.ReceivedAt <= capturedAt)
+                .OrderBy(entry => entry.ReceivedAt)
                 .ToList();
 
             var fieldKeys = orderedEntries
@@ -87,14 +87,19 @@ public static partial class IncidentCaptureService
     private static string BuildCsv(IReadOnlyList<LogEntry> entries, IReadOnlyList<string> fieldKeys)
     {
         var builder = new StringBuilder();
-        var headers = new[] { "Captured Time", "Disposition" }
+        var headers = new[] { "Received Time", "Event Time", "Disposition" }
             .Concat(fieldKeys.Select(ColumnNameFormatter.ToDisplayName))
             .Concat(["Raw"]);
 
         builder.AppendLine(string.Join(',', headers.Select(EscapeCsv)));
         foreach (var entry in entries)
         {
-            var values = new[] { entry.OccurredAt.ToString("O", CultureInfo.InvariantCulture), entry.Disposition.ToString() }
+            var values = new[]
+                {
+                    entry.ReceivedAt.ToString("O", CultureInfo.InvariantCulture),
+                    entry.OccurredAt.ToString("O", CultureInfo.InvariantCulture),
+                    entry.Disposition.ToString()
+                }
                 .Concat(fieldKeys.Select(field => entry.Fields.TryGetValue(field, out var value) ? value : string.Empty))
                 .Concat([entry.RawLine]);
 
@@ -108,6 +113,7 @@ public static partial class IncidentCaptureService
     {
         var rows = entries.Select(entry => new
         {
+            receivedAt = entry.ReceivedAt,
             occurredAt = entry.OccurredAt,
             disposition = entry.Disposition.ToString(),
             fields = entry.Fields,

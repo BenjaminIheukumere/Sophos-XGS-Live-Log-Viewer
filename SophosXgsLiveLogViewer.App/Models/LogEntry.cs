@@ -2,6 +2,8 @@ namespace SophosXgsLiveLogViewer.App.Models;
 
 public sealed class LogEntry
 {
+    public DateTimeOffset ReceivedAt { get; init; } = DateTimeOffset.Now;
+
     public DateTimeOffset OccurredAt { get; init; } = DateTimeOffset.Now;
 
     public string SourceLogFile { get; init; } = string.Empty;

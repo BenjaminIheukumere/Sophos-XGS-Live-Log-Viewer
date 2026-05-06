@@ -19,7 +19,8 @@ public sealed class IncidentCaptureServiceTests
         {
             new LogEntry
             {
-                OccurredAt = capturedAt.AddSeconds(-10),
+                ReceivedAt = capturedAt.AddSeconds(-10),
+                OccurredAt = capturedAt.AddDays(-2),
                 Disposition = LogDisposition.Denied,
                 RawLine = "log_type=\"Firewall\" status=\"Deny\" src_ip=\"192.0.2.10\"",
                 Fields = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
@@ -31,7 +32,8 @@ public sealed class IncidentCaptureServiceTests
             },
             new LogEntry
             {
-                OccurredAt = capturedAt.AddMinutes(-10),
+                ReceivedAt = capturedAt.AddMinutes(-10),
+                OccurredAt = capturedAt.AddSeconds(-10),
                 Disposition = LogDisposition.Allowed,
                 RawLine = "log_type=\"Firewall\" status=\"Allow\" src_ip=\"198.51.100.10\"",
                 Fields = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
@@ -67,6 +69,8 @@ public sealed class IncidentCaptureServiceTests
             var csv = reader.ReadToEnd();
             Assert.Contains("192.0.2.10", csv);
             Assert.DoesNotContain("198.51.100.10", csv);
+            Assert.Contains("Received Time", csv);
+            Assert.Contains("Event Time", csv);
         }
         finally
         {

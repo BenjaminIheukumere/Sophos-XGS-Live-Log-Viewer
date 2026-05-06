@@ -446,8 +446,8 @@ public partial class MainWindow : Window
         var windowStart = capturedAt - duration;
         var preset = CreateCurrentFilterPreset();
         var rows = _entryBuffer
-            .Where(entry => entry.OccurredAt >= windowStart
-                && entry.OccurredAt <= capturedAt
+            .Where(entry => entry.ReceivedAt >= windowStart
+                && entry.ReceivedAt <= capturedAt
                 && MatchesSelectedLogCategory(entry)
                 && MatchesFilterConditions(entry))
             .ToList();
