@@ -116,7 +116,6 @@ Use a SIEM, Syslog server or Sophos Central for durable audit storage.
 ## Security notes
 
   * No firewall credentials are stored in source code.
-  * Real profiles, vault files, test firewall credentials and local samples must not be committed.
   * SSH host keys are pinned after trust-on-first-use.
   * Use least-privilege accounts where possible.
   * Run only against firewalls you own or administer.
