@@ -68,7 +68,12 @@
                     </Hyperlink>
                 </TextBlock>
 
-                <TextBlock Text="Tel.: +49 177 3 555 059" Margin="0,0,0,8" />
+                <TextBlock Margin="0,0,0,8">
+                    <Run Text="Tel.: " />
+                    <Hyperlink NavigateUri="tel:+491773555059" RequestNavigate="Hyperlink_RequestNavigate">
+                        <Run Text="+49 177 3 555 059" />
+                    </Hyperlink>
+                </TextBlock>
 
                 <TextBlock Margin="0,0,0,8">
                     <Run Text="Email: " />
