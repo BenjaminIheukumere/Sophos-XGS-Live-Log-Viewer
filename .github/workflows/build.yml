@@ -1,0 +1,29 @@
+name: build
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  test:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Restore
+        run: dotnet restore SophosXgsLiveLogViewer.slnx
+
+      - name: Build
+        run: dotnet build SophosXgsLiveLogViewer.slnx --configuration Release --no-restore
+
+      - name: Test
+        run: dotnet test SophosXgsLiveLogViewer.slnx --configuration Release --no-build

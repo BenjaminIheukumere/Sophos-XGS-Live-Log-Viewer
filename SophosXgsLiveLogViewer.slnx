@@ -1,0 +1,4 @@
+<Solution>
+  <Project Path="SophosXgsLiveLogViewer.App/SophosXgsLiveLogViewer.App.csproj" />
+  <Project Path="SophosXgsLiveLogViewer.Tests/SophosXgsLiveLogViewer.Tests.csproj" />
+</Solution>

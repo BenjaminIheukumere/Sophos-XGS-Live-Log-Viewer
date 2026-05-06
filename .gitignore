@@ -1,0 +1,29 @@
+# Build output
+bin/
+obj/
+artifacts/
+dist/
+TestResults/
+*.user
+*.suo
+*.cache
+*.log
+
+# Local/private data
+.local/
+.env
+.env.*
+*.secret
+*.secrets
+*vault*.json
+ssh-test.json
+appsettings.*.json
+
+# IDE
+.vs/
+.vscode/
+.idea/
+
+# OS
+Thumbs.db
+Desktop.ini

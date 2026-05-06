@@ -1,0 +1,93 @@
+<Window x:Class="SophosXgsLiveLogViewer.App.ProfileEditorWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Sophos XGS Live Log Viewer by Benjamin Iheukumere - Firewall Profile"
+        Height="520"
+        Width="560"
+        WindowStartupLocation="CenterOwner"
+        ResizeMode="NoResize"
+        Icon="Assets/AppIcon.ico"
+        Background="{StaticResource AppSurfaceBrush}">
+    <Grid Margin="18">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="150" />
+            <ColumnDefinition Width="*" />
+        </Grid.ColumnDefinitions>
+
+        <TextBlock Grid.Row="0" VerticalAlignment="Center" Text="Profilname" />
+        <TextBox x:Name="NameBox" Grid.Row="0" Grid.Column="1" Margin="0,0,0,8" />
+
+        <TextBlock Grid.Row="1" VerticalAlignment="Center" Text="Host/IP" />
+        <TextBox x:Name="HostBox" Grid.Row="1" Grid.Column="1" Margin="0,0,0,8" />
+
+        <TextBlock Grid.Row="2" VerticalAlignment="Center" Text="SSH-Port" />
+        <TextBox x:Name="PortBox" Grid.Row="2" Grid.Column="1" Margin="0,0,0,8" Text="22" />
+
+        <TextBlock Grid.Row="3" VerticalAlignment="Center" Text="Username" />
+        <TextBox x:Name="UsernameBox" Grid.Row="3" Grid.Column="1" Margin="0,0,0,8" />
+
+        <TextBlock Grid.Row="4" VerticalAlignment="Center" Text="Passwort" />
+        <PasswordBox x:Name="PasswordBox" Grid.Row="4" Grid.Column="1" Margin="0,0,0,8" MinHeight="28" />
+
+        <TextBlock Grid.Row="5" VerticalAlignment="Center" Text="SSH Hostkey" />
+        <TextBox x:Name="HostKeyBox" Grid.Row="5" Grid.Column="1" Margin="0,0,0,8" />
+
+        <CheckBox x:Name="AdvancedShellBox"
+                  Grid.Row="6"
+                  Grid.Column="1"
+                  Margin="0,0,0,8"
+                  Content="Sophos Advanced Shell per Menü öffnen"
+                  IsChecked="True" />
+
+        <TextBlock Grid.Row="7" VerticalAlignment="Center" Text="Quelle" />
+        <ComboBox x:Name="SourceModeBox"
+                  Grid.Row="7"
+                  Grid.Column="1"
+                  Margin="0,0,0,8" />
+
+        <Grid Grid.Row="8" Grid.ColumnSpan="2" Margin="0,4,0,10">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="*" />
+            </Grid.RowDefinitions>
+            <TextBlock Text="Zusätzliche Logdateien" Margin="0,0,0,4" />
+            <TextBox x:Name="ExtraFilesBox"
+                     Grid.Row="1"
+                     AcceptsReturn="True"
+                     TextWrapping="Wrap"
+                     VerticalScrollBarVisibility="Auto" />
+        </Grid>
+
+        <TextBlock x:Name="ErrorText"
+                   Grid.Row="9"
+                   Grid.ColumnSpan="2"
+                   Foreground="#FF6B7A"
+                   VerticalAlignment="Center"
+                   Margin="0,0,0,8" />
+
+        <StackPanel Grid.Row="10"
+                    Grid.ColumnSpan="2"
+                    Orientation="Horizontal"
+                    HorizontalAlignment="Right">
+            <Button Content="Abbrechen" Click="Cancel_Click" />
+            <Button Content="Speichern"
+                    Background="{StaticResource AccentBrush}"
+                    Foreground="White"
+                    Click="Save_Click" />
+        </StackPanel>
+    </Grid>
+</Window>

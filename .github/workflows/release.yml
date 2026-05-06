@@ -1,0 +1,48 @@
+name: release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Test
+        run: dotnet test SophosXgsLiveLogViewer.slnx --configuration Release
+
+      - name: Publish win-x64
+        run: >
+          dotnet publish SophosXgsLiveLogViewer.App/SophosXgsLiveLogViewer.App.csproj
+          --configuration Release
+          --runtime win-x64
+          --self-contained true
+          -p:PublishSingleFile=true
+          -p:IncludeNativeLibrariesForSelfExtract=true
+          -p:DebugType=none
+          -p:DebugSymbols=false
+          --output artifacts/win-x64
+
+      - name: Package
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Path dist -Force | Out-Null
+          Compress-Archive -Path artifacts/win-x64/* -DestinationPath dist/Sophos-XGS-Live-Log-Viewer-win-x64.zip -Force
+
+      - name: Create release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/Sophos-XGS-Live-Log-Viewer-win-x64.zip

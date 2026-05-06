@@ -1,0 +1,336 @@
+<Window x:Class="SophosXgsLiveLogViewer.App.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Sophos XGS Live Log Viewer by Benjamin Iheukumere"
+        Height="920"
+        Width="1680"
+        MinHeight="700"
+        MinWidth="1180"
+        Icon="Assets/AppIcon.ico"
+        Background="{StaticResource AppSurfaceBrush}"
+        Closing="Window_Closing">
+    <Grid Background="{StaticResource AppSurfaceBrush}">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="64" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="32" />
+        </Grid.RowDefinitions>
+
+        <Border Grid.Row="0"
+                Background="{StaticResource HeaderSurfaceBrush}"
+                BorderBrush="{StaticResource BorderBrushSoft}"
+                BorderThickness="0,0,0,1">
+            <DockPanel LastChildFill="False" Margin="14,0">
+                <StackPanel Orientation="Horizontal"
+                            VerticalAlignment="Center">
+                    <Border Width="40"
+                            Height="40"
+                            Background="#071018"
+                            BorderBrush="{StaticResource AccentBrush}"
+                            BorderThickness="1"
+                            CornerRadius="8"
+                            Effect="{StaticResource AccentGlow}">
+                        <Image Source="Assets/AppIcon.png"
+                               Width="34"
+                               Height="34"
+                               Stretch="Uniform"
+                               HorizontalAlignment="Center"
+                               VerticalAlignment="Center" />
+                    </Border>
+                    <StackPanel Margin="12,0,22,0" VerticalAlignment="Center">
+                        <TextBlock Text="SOPHOS XGS LIVE LOG VIEWER"
+                                   FontSize="17"
+                                   FontWeight="SemiBold"
+                                   Foreground="{StaticResource TextBrush}" />
+                        <TextBlock Text="by Benjamin Iheukumere | SSH pull mode | sub-second refresh | local encrypted profiles"
+                                   FontSize="11"
+                                   Foreground="{StaticResource MutedTextBrush}" />
+                    </StackPanel>
+                    <Button x:Name="ConnectButton" Content="Connect" Click="Connect_Click" />
+                    <Button x:Name="DisconnectButton" Content="Stop" Click="Disconnect_Click" IsEnabled="False" />
+                    <Button Content="Demo" Click="Demo_Click" />
+                    <Button Content="Clear" Click="Clear_Click" />
+                    <Button Content="About" Click="About_Click" />
+                    <CheckBox x:Name="PauseLiveScrollBox"
+                              Content="Pause scroll"
+                              Margin="12,0,0,0"
+                              VerticalAlignment="Center"
+                              Checked="PauseLiveScrollBox_Checked"
+                              Unchecked="PauseLiveScrollBox_Unchecked" />
+                </StackPanel>
+
+                <StackPanel DockPanel.Dock="Right"
+                            Orientation="Horizontal"
+                            VerticalAlignment="Center">
+                    <TextBlock Text="Profile"
+                               Foreground="{StaticResource MutedTextBrush}"
+                               VerticalAlignment="Center"
+                               Margin="0,0,8,0" />
+                    <ComboBox x:Name="ProfileCombo"
+                              Width="280"
+                              DisplayMemberPath="Name"
+                              SelectionChanged="ProfileCombo_SelectionChanged" />
+                    <Button Content="+" ToolTip="Add profile" Click="AddProfile_Click" />
+                    <Button Content="Edit" Click="EditProfile_Click" />
+                    <Button Content="Del" Click="DeleteProfile_Click" />
+                </StackPanel>
+
+                <StackPanel DockPanel.Dock="Right"
+                            Orientation="Horizontal"
+                            VerticalAlignment="Center"
+                            Margin="0,0,18,0">
+                    <TextBlock Text="CPU"
+                               Foreground="{StaticResource MutedTextBrush}"
+                               VerticalAlignment="Center"
+                               Margin="0,0,6,0" />
+                    <ItemsControl x:Name="CpuItemsControl"
+                                  VerticalAlignment="Center">
+                        <ItemsControl.ItemsPanel>
+                            <ItemsPanelTemplate>
+                                <StackPanel Orientation="Horizontal" />
+                            </ItemsPanelTemplate>
+                        </ItemsControl.ItemsPanel>
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <Border x:Name="CpuChip"
+                                        MinWidth="62"
+                                        Margin="2,0"
+                                        Padding="7,4"
+                                        CornerRadius="4"
+                                        BorderThickness="1"
+                                        Background="#102535"
+                                        BorderBrush="{StaticResource BorderBrushSoft}">
+                                    <TextBlock Text="{Binding DisplayText}"
+                                               FontSize="11"
+                                               FontWeight="SemiBold"
+                                               Foreground="{StaticResource TextBrush}" />
+                                </Border>
+                                <DataTemplate.Triggers>
+                                    <DataTrigger Binding="{Binding State}" Value="Low">
+                                        <Setter TargetName="CpuChip" Property="Background" Value="#103522" />
+                                        <Setter TargetName="CpuChip" Property="BorderBrush" Value="{StaticResource AccentGreenBrush}" />
+                                    </DataTrigger>
+                                    <DataTrigger Binding="{Binding State}" Value="Medium">
+                                        <Setter TargetName="CpuChip" Property="Background" Value="#3A300D" />
+                                        <Setter TargetName="CpuChip" Property="BorderBrush" Value="#FFC857" />
+                                    </DataTrigger>
+                                    <DataTrigger Binding="{Binding State}" Value="High">
+                                        <Setter TargetName="CpuChip" Property="Background" Value="#3B141B" />
+                                        <Setter TargetName="CpuChip" Property="BorderBrush" Value="#FF4D6D" />
+                                    </DataTrigger>
+                                </DataTemplate.Triggers>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </StackPanel>
+            </DockPanel>
+        </Border>
+
+        <Border Grid.Row="1"
+                Background="{StaticResource PanelSurfaceBrush}"
+                BorderBrush="{StaticResource BorderBrushSoft}"
+                BorderThickness="0,0,0,1">
+            <Grid Margin="12,6">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                </Grid.RowDefinitions>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <TextBlock x:Name="CountersText"
+                           Grid.Column="1"
+                           Foreground="{StaticResource AccentGreenBrush}"
+                           VerticalAlignment="Center"
+                           Margin="0,0,14,0" />
+                <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
+                    <TextBlock Text="Filter"
+                               Foreground="{StaticResource MutedTextBrush}"
+                               VerticalAlignment="Center"
+                               Margin="0,0,8,0" />
+                    <ComboBox x:Name="FilterConnectorBox" Width="72" Margin="0,0,6,0" />
+                    <ComboBox x:Name="FilterFieldBox"
+                              Width="185"
+                              IsEditable="True"
+                              IsTextSearchEnabled="True"
+                              DisplayMemberPath="DisplayName"
+                              SelectedValuePath="Key"
+                              TextSearch.TextPath="DisplayName"
+                              SelectionChanged="FilterFieldBox_SelectionChanged"
+                              Margin="0,0,6,0" />
+                    <ComboBox x:Name="FilterOperatorBox" Width="120" Margin="0,0,6,0" />
+                    <ComboBox x:Name="FilterValueBox"
+                              Width="245"
+                              IsEditable="True"
+                              IsTextSearchEnabled="True"
+                              Margin="0,0,6,0" />
+                    <Button Content="Add" Click="AddFilter_Click" />
+                    <Button Content="Clear" Click="ResetFilter_Click" />
+                </StackPanel>
+                <ItemsControl x:Name="ActiveFiltersItemsControl"
+                              Grid.Row="1"
+                              Grid.ColumnSpan="2"
+                              Margin="38,6,0,0">
+                    <ItemsControl.ItemsPanel>
+                        <ItemsPanelTemplate>
+                            <WrapPanel />
+                        </ItemsPanelTemplate>
+                    </ItemsControl.ItemsPanel>
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                            <Border Margin="0,0,6,4"
+                                    Padding="8,4"
+                                    CornerRadius="4"
+                                    Background="#102535"
+                                    BorderBrush="{StaticResource AccentBrush}"
+                                    BorderThickness="1">
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock Text="{Binding DisplayText}"
+                                               FontSize="11"
+                                               Foreground="{StaticResource TextBrush}"
+                                               VerticalAlignment="Center" />
+                                    <Button Content="x"
+                                            Tag="{Binding}"
+                                            MinHeight="0"
+                                            Padding="7,0"
+                                            Margin="7,0,0,0"
+                                            Click="RemoveFilter_Click" />
+                                </StackPanel>
+                            </Border>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </Grid>
+        </Border>
+
+        <Grid Grid.Row="2">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="280" />
+                <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
+
+                    <Border x:Name="LogSelectionPanel"
+                    Grid.Column="0"
+                    BorderBrush="{StaticResource BorderBrushSoft}"
+                    BorderThickness="0,0,1,0"
+                    Background="{StaticResource PanelSurfaceBrush}">
+                <Grid Margin="12">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="*" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
+
+                        <TextBlock Text="LIVE LOG"
+                               FontWeight="SemiBold"
+                               FontSize="14"
+                               Foreground="{StaticResource AccentBrush}"
+                               Margin="0,0,0,10" />
+
+                    <Grid Grid.Row="1" Margin="0,0,0,12">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <ComboBox x:Name="ActiveLogCombo"
+                                  DisplayMemberPath="DisplayName"
+                                  SelectionChanged="ActiveLogCombo_SelectionChanged"
+                                  Margin="0,0,6,0" />
+                        <Button x:Name="ColumnPickerButton"
+                                Grid.Column="1"
+                                Content="Columns"
+                                Click="ColumnPicker_Click" />
+                    </Grid>
+
+                    <TextBlock x:Name="SelectedFilesText"
+                               Grid.Row="2"
+                               Foreground="{StaticResource MutedTextBrush}"
+                               TextWrapping="Wrap"
+                               Margin="0,12,0,0" />
+                </Grid>
+            </Border>
+
+            <Grid Grid.Column="1">
+                <TextBlock Text="SOPHOS"
+                           FontSize="124"
+                           FontWeight="Bold"
+                           Foreground="#102638"
+                           Opacity="0.45"
+                           HorizontalAlignment="Center"
+                           VerticalAlignment="Center"
+                           IsHitTestVisible="False" />
+                <TextBlock Text="XGS"
+                           FontSize="72"
+                           FontWeight="Bold"
+                           Foreground="#0E3343"
+                           Opacity="0.55"
+                           HorizontalAlignment="Center"
+                           VerticalAlignment="Center"
+                           Margin="0,126,0,0"
+                           IsHitTestVisible="False" />
+
+                <TabControl Background="Transparent">
+                    <TabItem Header="Live">
+                        <DataGrid x:Name="LogGrid"
+                                  AutoGenerateColumns="False"
+                                  CanUserAddRows="False"
+                                  CanUserDeleteRows="False"
+                                  EnableRowVirtualization="True"
+                                  EnableColumnVirtualization="True"
+                                  GridLinesVisibility="Horizontal"
+                                  HeadersVisibility="Column"
+                                  IsReadOnly="True"
+                                  ItemsSource="{Binding}"
+                                  PreviewMouseLeftButtonUp="LogGrid_PreviewMouseLeftButtonUp"
+                                  RowHeight="34"
+                                  ScrollViewer.CanContentScroll="True"
+                                  ScrollViewer.IsDeferredScrollingEnabled="True"
+                                  SelectionMode="Extended"
+                                  VirtualizingPanel.IsVirtualizing="True"
+                                  VirtualizingPanel.ScrollUnit="Item"
+                                  VirtualizingPanel.VirtualizationMode="Recycling">
+                            <DataGrid.RowStyle>
+                                <Style TargetType="DataGridRow">
+                                    <Setter Property="Background" Value="{StaticResource NeutralRowBrush}" />
+                                    <Setter Property="Foreground" Value="{StaticResource TextBrush}" />
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding Disposition}" Value="Denied">
+                                            <Setter Property="Background" Value="{StaticResource DeniedBrush}" />
+                                        </DataTrigger>
+                                        <DataTrigger Binding="{Binding Disposition}" Value="Allowed">
+                                            <Setter Property="Background" Value="{StaticResource AllowedBrush}" />
+                                        </DataTrigger>
+                                        <Trigger Property="IsSelected" Value="True">
+                                            <Setter Property="Background" Value="#07344B" />
+                                            <Setter Property="Foreground" Value="{StaticResource TextBrush}" />
+                                        </Trigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </DataGrid.RowStyle>
+                        </DataGrid>
+                    </TabItem>
+                    <TabItem Header="Diagnostics">
+                        <Grid Background="{StaticResource AppBackgroundBrush}">
+                            <ListBox x:Name="DiagnosticsList"
+                                     Margin="8"
+                                     FontFamily="Consolas"
+                                     FontSize="12" />
+                        </Grid>
+                    </TabItem>
+                </TabControl>
+            </Grid>
+        </Grid>
+
+        <DockPanel Grid.Row="3"
+                   Background="{StaticResource HeaderBrush}">
+            <TextBlock x:Name="StatusText"
+                       Foreground="{StaticResource MutedTextBrush}"
+                       VerticalAlignment="Center"
+                       Margin="10,0"
+                       Text="Ready" />
+        </DockPanel>
+    </Grid>
+</Window>
