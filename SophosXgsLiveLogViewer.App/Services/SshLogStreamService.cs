@@ -32,7 +32,6 @@ public sealed partial class SshLogStreamService : IDisposable
         Action<ApplianceCpuUsage>? onCpuUsage = null)
     {
         ThrowIfDisposed();
-        ValidateProfile(profile);
         _ignoredRowsReported = 0;
         _eventDbColumns.Clear();
         lock (_lineLock)
@@ -46,10 +45,7 @@ public sealed partial class SshLogStreamService : IDisposable
         }
 
         using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-        var connectionInfo = new PasswordConnectionInfo(profile.Host, profile.Port, profile.Username, profile.Password)
-        {
-            Timeout = TimeSpan.FromSeconds(10)
-        };
+        var connectionInfo = CreateConnectionInfo(profile);
 
         using var client = new SshClient(connectionInfo);
         _client = client;
@@ -72,7 +68,14 @@ public sealed partial class SshLogStreamService : IDisposable
 
         onStatus($"Connecting to {profile.Host}:{profile.Port} ...");
         onDiagnostic($"SSH target: {profile.Host}:{profile.Port}, source mode: {profile.SourceMode}");
+        onDiagnostic(SshAlgorithmPolicy.Describe(profile.SshSecurityMode));
         await Task.Run(client.Connect, cancellationToken).ConfigureAwait(false);
+        onDiagnostic(
+            "SSH negotiated: "
+            + $"KEX={connectionInfo.CurrentKeyExchangeAlgorithm}, "
+            + $"HostKey={connectionInfo.CurrentHostKeyAlgorithm}, "
+            + $"C2S={connectionInfo.CurrentClientEncryption}/{connectionInfo.CurrentClientHmacAlgorithm}, "
+            + $"S2C={connectionInfo.CurrentServerEncryption}/{connectionInfo.CurrentServerHmacAlgorithm}");
 
         onStatus("SSH connected. Starting live stream ...");
         using var shell = client.CreateShellStream("sophos-live-log", 120, 40, 0, 0, 64 * 1024);
@@ -162,6 +165,20 @@ public sealed partial class SshLogStreamService : IDisposable
         {
             throw new InvalidOperationException("Passwort fehlt.");
         }
+    }
+
+    public static PasswordConnectionInfo CreateConnectionInfo(FirewallProfile profile)
+    {
+        ValidateProfile(profile);
+
+        var connectionInfo = new PasswordConnectionInfo(profile.Host, profile.Port, profile.Username, profile.Password)
+        {
+            Timeout = TimeSpan.FromSeconds(10),
+            RetryAttempts = 1
+        };
+
+        SshAlgorithmPolicy.Apply(connectionInfo, profile.SshSecurityMode);
+        return connectionInfo;
     }
 
     private static string BuildEventDbCommand()

@@ -145,7 +145,7 @@
                            Foreground="{StaticResource AccentGreenBrush}"
                            VerticalAlignment="Center"
                            Margin="0,0,14,0" />
-                <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
+                <WrapPanel Grid.Column="0" VerticalAlignment="Center">
                     <TextBlock Text="Filter"
                                Foreground="{StaticResource MutedTextBrush}"
                                VerticalAlignment="Center"
@@ -168,7 +168,20 @@
                               Margin="0,0,6,0" />
                     <Button Content="Add" Click="AddFilter_Click" />
                     <Button Content="Clear" Click="ResetFilter_Click" />
-                </StackPanel>
+                    <Button Content="Import" Click="ImportFilters_Click" />
+                    <Button Content="Export" Click="ExportFilters_Click" />
+                    <TextBlock Text="Capture"
+                               Foreground="{StaticResource MutedTextBrush}"
+                               VerticalAlignment="Center"
+                               Margin="14,0,6,0" />
+                    <ComboBox x:Name="CaptureDurationBox"
+                              Width="76"
+                              Margin="0,0,6,0" />
+                    <Button x:Name="CaptureButton"
+                            Content="Capture"
+                            ToolTip="Capture the selected recent time window to a ZIP with CSV, JSON, notes and metadata."
+                            Click="Capture_Click" />
+                </WrapPanel>
                 <ItemsControl x:Name="ActiveFiltersItemsControl"
                               Grid.Row="1"
                               Grid.ColumnSpan="2"

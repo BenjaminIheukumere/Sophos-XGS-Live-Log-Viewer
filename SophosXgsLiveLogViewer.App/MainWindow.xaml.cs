@@ -9,6 +9,7 @@ using System.Windows.Data;
 using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Threading;
+using Microsoft.Win32;
 using SophosXgsLiveLogViewer.App.Models;
 using SophosXgsLiveLogViewer.App.Services;
 using SophosXgsLiveLogViewer.App.ViewModels;
@@ -59,6 +60,8 @@ public partial class MainWindow : Window
         FilterConnectorBox.SelectedIndex = 0;
         FilterOperatorBox.ItemsSource = new[] { "Equals", "Not equals", "Contains", "Not contains", "Starts with", "Ends with" };
         FilterOperatorBox.SelectedIndex = 0;
+        CaptureDurationBox.ItemsSource = new[] { "30s", "60s", "5m" };
+        CaptureDurationBox.SelectedIndex = 1;
         _entryDrainTimer = new DispatcherTimer(DispatcherPriority.Background)
         {
             Interval = TimeSpan.FromMilliseconds(50)
@@ -332,12 +335,7 @@ public partial class MainWindow : Window
 
     private void ResetFilter_Click(object sender, RoutedEventArgs e)
     {
-        foreach (var condition in _filterConditions)
-        {
-            condition.PropertyChanged -= FilterCondition_PropertyChanged;
-        }
-
-        _filterConditions.Clear();
+        ClearFilterConditions();
         _pendingWhilePaused = 0;
         FilterValueBox.Text = string.Empty;
         FilterConnectorBox.SelectedIndex = 0;
@@ -345,6 +343,16 @@ public partial class MainWindow : Window
         SetStatus("Filter reset.");
         UpdateFilterFieldOptions();
         RebuildVisibleRows();
+    }
+
+    private void ClearFilterConditions()
+    {
+        foreach (var condition in _filterConditions)
+        {
+            condition.PropertyChanged -= FilterCondition_PropertyChanged;
+        }
+
+        _filterConditions.Clear();
     }
 
     private void AddFilter_Click(object sender, RoutedEventArgs e)
@@ -369,6 +377,103 @@ public partial class MainWindow : Window
         _filterConditions.Add(condition);
         FilterValueBox.Text = string.Empty;
         RebuildVisibleRows();
+    }
+
+    private void ImportFilters_Click(object sender, RoutedEventArgs e)
+    {
+        var dialog = new OpenFileDialog
+        {
+            Title = "Import filter preset",
+            Filter = "Sophos filter preset (*.sxlv-filter.json)|*.sxlv-filter.json|JSON files (*.json)|*.json|All files (*.*)|*.*",
+            CheckFileExists = true,
+            Multiselect = false
+        };
+
+        if (dialog.ShowDialog(this) != true)
+        {
+            return;
+        }
+
+        try
+        {
+            var preset = FilterPresetService.Load(dialog.FileName);
+            ApplyFilterPreset(preset);
+            SetStatus($"Imported {preset.Conditions.Count:N0} filter condition(s) for {preset.LogName}.");
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidDataException or System.Text.Json.JsonException)
+        {
+            SetStatus("Filter import failed: " + ex.Message);
+        }
+    }
+
+    private void ExportFilters_Click(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            var preset = CreateCurrentFilterPreset();
+            var fileName = $"sxlv-filter-{_activeLog.Key}-{DateTimeOffset.Now:yyyyMMdd-HHmmss}.sxlv-filter.json";
+            var dialog = new SaveFileDialog
+            {
+                Title = "Export filter preset",
+                FileName = fileName,
+                Filter = "Sophos filter preset (*.sxlv-filter.json)|*.sxlv-filter.json|JSON files (*.json)|*.json|All files (*.*)|*.*",
+                OverwritePrompt = true
+            };
+
+            if (dialog.ShowDialog(this) != true)
+            {
+                return;
+            }
+
+            FilterPresetService.Save(dialog.FileName, preset);
+            SetStatus($"Exported {preset.Conditions.Count:N0} filter condition(s): {dialog.FileName}");
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidDataException)
+        {
+            SetStatus("Filter export failed: " + ex.Message);
+        }
+    }
+
+    private async void Capture_Click(object sender, RoutedEventArgs e)
+    {
+        if (CaptureButton.IsEnabled == false)
+        {
+            return;
+        }
+
+        var duration = ParseCaptureDuration(CaptureDurationBox.SelectedItem as string ?? CaptureDurationBox.Text);
+        var capturedAt = DateTimeOffset.Now;
+        var windowStart = capturedAt - duration;
+        var preset = CreateCurrentFilterPreset();
+        var rows = _entryBuffer
+            .Where(entry => entry.OccurredAt >= windowStart
+                && entry.OccurredAt <= capturedAt
+                && MatchesSelectedLogCategory(entry)
+                && MatchesFilterConditions(entry))
+            .ToList();
+
+        CaptureButton.IsEnabled = false;
+        SetStatus($"Writing capture for last {FormatDuration(duration)} ...");
+
+        try
+        {
+            var outputPath = await Task.Run(() => IncidentCaptureService.CreateCaptureZip(
+                rows,
+                _activeLog,
+                preset,
+                duration,
+                capturedAt));
+
+            SetStatus($"Capture saved: {outputPath} ({rows.Count:N0} row(s)).");
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException)
+        {
+            SetStatus("Capture failed: " + ex.Message);
+        }
+        finally
+        {
+            CaptureButton.IsEnabled = true;
+        }
     }
 
     private void RemoveFilter_Click(object sender, RoutedEventArgs e)
@@ -1091,6 +1196,79 @@ public partial class MainWindow : Window
             || string.Equals(option.Key, trimmed, StringComparison.OrdinalIgnoreCase));
 
         return match?.Key ?? trimmed;
+    }
+
+    private FilterPreset CreateCurrentFilterPreset()
+    {
+        return FilterPresetService.CreatePreset(
+            _activeLog.Key,
+            _activeLog.DisplayName,
+            _filterConditions,
+            $"{_activeLog.DisplayName} investigation");
+    }
+
+    private void ApplyFilterPreset(FilterPreset preset)
+    {
+        var log = LogDefinition.Find(preset.LogKey)
+            ?? throw new InvalidDataException("Filter preset references an unknown log source.");
+
+        _activeLog = log;
+        var profile = SelectedProfile();
+        if (profile is not null)
+        {
+            profile.SelectedLogKeys = [log.Key];
+            SaveVault();
+        }
+
+        _suppressLogSelectionSave = true;
+        try
+        {
+            ActiveLogCombo.SelectedItem = log;
+        }
+        finally
+        {
+            _suppressLogSelectionSave = false;
+        }
+
+        ClearFilterConditions();
+        foreach (var imported in preset.Conditions)
+        {
+            var condition = new FilterCondition
+            {
+                Connector = imported.Connector,
+                Field = imported.Field,
+                Operator = imported.Operator,
+                Value = imported.Value
+            };
+
+            condition.PropertyChanged += FilterCondition_PropertyChanged;
+            _filterConditions.Add(condition);
+        }
+
+        FilterConnectorBox.SelectedIndex = 0;
+        FilterOperatorBox.SelectedIndex = 0;
+        FilterValueBox.Text = string.Empty;
+        RebuildActiveFieldCache();
+        UpdateSelectedFilesText();
+        UpdateFilterFieldOptions();
+        RebuildVisibleRows();
+    }
+
+    private static TimeSpan ParseCaptureDuration(string value)
+    {
+        return value.Trim().ToLowerInvariant() switch
+        {
+            "30s" => TimeSpan.FromSeconds(30),
+            "5m" => TimeSpan.FromMinutes(5),
+            _ => TimeSpan.FromSeconds(60)
+        };
+    }
+
+    private static string FormatDuration(TimeSpan duration)
+    {
+        return duration.TotalMinutes >= 1
+            ? $"{duration.TotalMinutes:0}m"
+            : $"{duration.TotalSeconds:0}s";
     }
 
     private void Window_Closing(object? sender, CancelEventArgs e)

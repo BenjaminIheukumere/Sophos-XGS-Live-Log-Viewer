@@ -16,9 +16,11 @@ It is built for firewall troubleshooting when you do not want to deploy or recon
   * Dynamic columns per selected log type
   * Column picker for additional fields
   * Clickable filter builder with connector, field, operator and value dropdowns
+  * Import and export filter presets so teams can standardize investigations
+  * One-click incident capture for short recent time windows
   * Per-firewall profiles
   * Local encrypted credential vault protected by a master password
-  * SSH host key trust-on-first-use with fingerprint pinning
+  * Strict SSH mode by default with host key trust-on-first-use and fingerprint pinning
   * Appliance CPU usage display
   * Demo mode for parser, filter and UI testing without a firewall
 
@@ -69,6 +71,7 @@ dotnet publish .\SophosXgsLiveLogViewer.App\SophosXgsLiveLogViewer.App.csproj -c
   4. Connect to the firewall.
   5. Select one live log source from the dropdown.
   6. Add filters through the dropdown-based filter builder if needed.
+  7. Export shared filter presets or capture the recent 30s, 60s or 5m window for incident notes.
 
 Profiles are stored locally in:
 
@@ -100,6 +103,27 @@ Supported operators include:
   * Starts with
   * Ends with
 
+Filter presets are JSON files with the extension `.sxlv-filter.json`. They contain only the selected log source and filter conditions. They do not contain firewall profiles, hostnames, usernames, passwords or vault data.
+
+* * *
+
+## Incident captures
+
+The Capture button writes a ZIP under:
+
+```text
+%USERPROFILE%\Documents\Sophos XGS Live Log Viewer\Captures
+```
+
+Each capture contains:
+
+  * `logs.csv`
+  * `logs.json`
+  * `incident-notes.md`
+  * `metadata.json`
+
+Captures can contain IP addresses, usernames, URLs, domains and raw firewall log content. Treat them as sensitive evidence.
+
 * * *
 
 ## Performance notes
@@ -117,7 +141,11 @@ Use a SIEM, Syslog server or Sophos Central for durable audit storage.
 
   * No firewall credentials are stored in source code.
   * SSH host keys are pinned after trust-on-first-use.
+  * Strict SSH mode disables legacy SSH algorithms by default.
+  * Compatibility SSH mode should only be used when an older appliance cannot negotiate modern algorithms.
   * Use least-privilege accounts where possible.
+  * Run the app from a secured admin workstation, ideally on a dedicated admin network or VPN.
+  * Keep the workstation patched, disk-encrypted and protected against clipboard/session snooping.
   * Run only against firewalls you own or administer.
 
 * * *

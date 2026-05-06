@@ -16,6 +16,8 @@ public sealed class FirewallProfile
 
     public string? ExpectedHostKeySha256 { get; set; }
 
+    public SshSecurityMode SshSecurityMode { get; set; } = SshSecurityMode.Strict;
+
     public bool UseSophosAdvancedShell { get; set; } = true;
 
     public LogSourceMode SourceMode { get; set; } = LogSourceMode.SophosEventDatabase;
@@ -35,6 +37,7 @@ public sealed class FirewallProfile
             Username = Username,
             Password = Password,
             ExpectedHostKeySha256 = ExpectedHostKeySha256,
+            SshSecurityMode = SshSecurityMode,
             UseSophosAdvancedShell = UseSophosAdvancedShell,
             SourceMode = SourceMode,
             SelectedLogKeys = [.. SelectedLogKeys],

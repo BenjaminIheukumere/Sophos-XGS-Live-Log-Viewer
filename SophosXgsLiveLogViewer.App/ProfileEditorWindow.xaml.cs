@@ -19,6 +19,8 @@ public partial class ProfileEditorWindow : Window
         UsernameBox.Text = _profile.Username;
         PasswordBox.Password = _profile.Password;
         HostKeyBox.Text = _profile.ExpectedHostKeySha256 ?? string.Empty;
+        SshSecurityModeBox.ItemsSource = Enum.GetValues<SshSecurityMode>();
+        SshSecurityModeBox.SelectedItem = _profile.SshSecurityMode;
         AdvancedShellBox.IsChecked = _profile.UseSophosAdvancedShell;
         SourceModeBox.ItemsSource = Enum.GetValues<LogSourceMode>();
         SourceModeBox.SelectedItem = _profile.SourceMode;
@@ -62,6 +64,9 @@ public partial class ProfileEditorWindow : Window
         _profile.Username = UsernameBox.Text.Trim();
         _profile.Password = PasswordBox.Password;
         _profile.ExpectedHostKeySha256 = string.IsNullOrWhiteSpace(HostKeyBox.Text) ? null : HostKeyBox.Text.Trim();
+        _profile.SshSecurityMode = SshSecurityModeBox.SelectedItem is SshSecurityMode securityMode
+            ? securityMode
+            : SshSecurityMode.Strict;
         _profile.UseSophosAdvancedShell = AdvancedShellBox.IsChecked == true;
         _profile.SourceMode = SourceModeBox.SelectedItem is LogSourceMode sourceMode
             ? sourceMode
