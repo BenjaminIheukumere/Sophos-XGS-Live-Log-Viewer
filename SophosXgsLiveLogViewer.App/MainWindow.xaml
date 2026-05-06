@@ -24,16 +24,14 @@
             <DockPanel LastChildFill="False" Margin="14,0">
                 <StackPanel Orientation="Horizontal"
                             VerticalAlignment="Center">
-                    <Border Width="40"
-                            Height="40"
-                            Background="#071018"
-                            BorderBrush="{StaticResource AccentBrush}"
-                            BorderThickness="1"
-                            CornerRadius="8"
+                    <Border Width="44"
+                            Height="44"
+                            Background="Transparent"
+                            BorderThickness="0"
                             Effect="{StaticResource AccentGlow}">
                         <Image Source="Assets/AppIcon.png"
-                               Width="34"
-                               Height="34"
+                               Width="40"
+                               Height="40"
                                Stretch="Uniform"
                                HorizontalAlignment="Center"
                                VerticalAlignment="Center" />
