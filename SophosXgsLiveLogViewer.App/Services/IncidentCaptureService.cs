@@ -132,7 +132,7 @@ public static partial class IncidentCaptureService
     {
         var metadata = new
         {
-            app = "Sophos XGS Live Log Viewer by Benjamin Iheukumere",
+            app = "Sophos XGS Live Log Viewer by Benjamin Iheukumere | Safelink IT",
             version = Assembly.GetExecutingAssembly().GetName().Version?.ToString() ?? "unknown",
             generatedAt = capturedAt,
             windowStart,

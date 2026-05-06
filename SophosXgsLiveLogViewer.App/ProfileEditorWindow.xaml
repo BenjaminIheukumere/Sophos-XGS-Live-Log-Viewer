@@ -1,7 +1,7 @@
 <Window x:Class="SophosXgsLiveLogViewer.App.ProfileEditorWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="Sophos XGS Live Log Viewer by Benjamin Iheukumere - Firewall Profile"
+        Title="Sophos XGS Live Log Viewer by Benjamin Iheukumere | Safelink IT - Firewall Profile"
         Height="620"
         Width="560"
         WindowStartupLocation="CenterOwner"

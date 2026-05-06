@@ -1,7 +1,7 @@
 <Window x:Class="SophosXgsLiveLogViewer.App.AboutWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="Sophos XGS Live Log Viewer by Benjamin Iheukumere - About"
+        Title="Sophos XGS Live Log Viewer by Benjamin Iheukumere | Safelink IT - About"
         Height="500"
         Width="620"
         WindowStartupLocation="CenterOwner"
@@ -41,7 +41,7 @@
                     <TextBlock Text="Sophos XGS Live Log Viewer"
                                FontSize="22"
                                FontWeight="SemiBold" />
-                    <TextBlock Text="by Benjamin Iheukumere"
+                    <TextBlock Text="by Benjamin Iheukumere | Safelink IT"
                                FontSize="14"
                                Foreground="{StaticResource AccentBrush}" />
                 </StackPanel>
@@ -59,7 +59,7 @@
                            FontWeight="SemiBold"
                            Margin="0,0,0,10" />
 
-                <TextBlock Text="Benjamin Iheukumere" Margin="0,0,0,8" />
+                <TextBlock Text="Benjamin Iheukumere | Safelink IT" Margin="0,0,0,8" />
 
                 <TextBlock Margin="0,0,0,8">
                     <Run Text="Website: " />
