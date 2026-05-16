@@ -7,14 +7,14 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <UseWPF>true</UseWPF>
     <ApplicationIcon>Assets\AppIcon.ico</ApplicationIcon>
-    <AssemblyName>Sophos XGS Live Log Viewer by Benjamin Iheukumere</AssemblyName>
+    <AssemblyName>Sophos XGS Live Log Viewer</AssemblyName>
     <Title>Sophos XGS Live Log Viewer by Benjamin Iheukumere | Safelink IT</Title>
     <Product>Sophos XGS Live Log Viewer by Benjamin Iheukumere | Safelink IT</Product>
     <Company>Benjamin Iheukumere</Company>
     <Authors>Benjamin Iheukumere</Authors>
     <Description>Windows desktop app for on-demand near-real-time Sophos XGS live log viewing over SSH.</Description>
     <Copyright>Copyright (c) 2026 Benjamin Iheukumere</Copyright>
-    <Version>1.1.4</Version>
+    <Version>1.1.5</Version>
     <RepositoryUrl>https://github.com/BenjaminIheukumere/Sophos-XGS-Live-Log-Viewer</RepositoryUrl>
   </PropertyGroup>
 

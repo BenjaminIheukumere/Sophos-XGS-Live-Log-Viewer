@@ -90,12 +90,12 @@ public sealed partial class SshLogStreamService : IDisposable
 
         var command = profile.SourceMode == LogSourceMode.SophosTroubleshootingFiles
             ? BuildTroubleshootingTailCommand(profile, selectedLogs)
-            : BuildEventDbCommand();
+            : BuildEventDbCommand(profile);
 
         shell.WriteLine(command);
         onStatus(profile.SourceMode == LogSourceMode.SophosTroubleshootingFiles
             ? $"Live: troubleshooting files, {selectedLogs.Count} log group(s)"
-            : $"Live: Sophos event DB, {selectedLogs.Count} log group(s), initial {InitialEventRows} rows");
+            : $"Live: fast streams + Sophos event DB, initial {InitialEventRows} rows");
 
         while (!linkedCts.IsCancellationRequested && client.IsConnected)
         {
@@ -181,10 +181,11 @@ public sealed partial class SshLogStreamService : IDisposable
         return connectionInfo;
     }
 
-    private static string BuildEventDbCommand()
+    private static string BuildEventDbCommand(FirewallProfile profile)
     {
         return $$"""
 {{BuildCpuShellPrelude()}}
+{{BuildFastFileTailCommand(profile)}}
 SXLV_DB=""
 printf '__SXLV_DIAG__%sStarting Sophos event DB discovery\n' "$SXLV_SEP"
 for SXLV_P in /tmp/eventlogs/active.db /var/eventlogs/active.db /tmp/eventlogs/*.db /var/eventlogs/*.db; do
@@ -215,12 +216,16 @@ SXLV_QTABLE="$(printf '%s' "$SXLV_TABLE" | sed 's/"/""/g')"
 printf '__SXLV_TABLE__%s%s\n' "$SXLV_SEP" "$SXLV_TABLE"
 SXLV_COLUMNS="$(sqlite3 -noheader "$SXLV_DB" "PRAGMA table_info('$SXLV_QTABLE');" | cut -d'|' -f2 | tr '\n' "$SXLV_SEP")"
 printf '__SXLV_COLUMNS__%srowid%s%s\n' "$SXLV_SEP" "$SXLV_SEP" "$SXLV_COLUMNS"
+SXLV_EMIT_HEALTH
+SXLV_START_FAST_FIREWALL_STREAM
+SXLV_START_FAST_FILE_TAILS
 SXLV_LAST="$(sqlite3 "$SXLV_DB" "select coalesce(max(rowid),0) from \"$SXLV_QTABLE\";")"
 SXLV_START=$((SXLV_LAST-{{InitialEventRows}}))
 [ "$SXLV_START" -lt 0 ] && SXLV_START=0
 printf '__SXLV_DIAG__%sInitial rowid window: %s..%s\n' "$SXLV_SEP" "$SXLV_START" "$SXLV_LAST"
 while true; do
     SXLV_EMIT_CPU
+    SXLV_EMIT_HEALTH
     sqlite3 -noheader -separator "$SXLV_SEP" "$SXLV_DB" "select rowid,* from \"$SXLV_QTABLE\" where rowid > $SXLV_START order by rowid limit 500;" | while IFS= read -r SXLV_ROW; do
         printf '__SXLV_ROW__%s%s\n' "$SXLV_SEP" "$SXLV_ROW"
     done
@@ -235,9 +240,14 @@ done
     {
         return """
 SXLV_SEP="$(printf '\036')"
+SXLV_BG_PIDS=""
 SXLV_CPU_PREV="/tmp/sxlv_cpu_prev_$$"
 SXLV_CPU_CUR="/tmp/sxlv_cpu_cur_$$"
 SXLV_LAST_CPU_TS=""
+SXLV_LAST_HEALTH_TS=0
+SXLV_REGISTER_BG() {
+    SXLV_BG_PIDS="$SXLV_BG_PIDS $1"
+}
 SXLV_EMIT_CPU() {
     SXLV_NOW="$(date +%s 2>/dev/null || echo 0)"
     [ "$SXLV_NOW" = "$SXLV_LAST_CPU_TS" ] && return
@@ -249,7 +259,39 @@ SXLV_EMIT_CPU() {
     fi
     mv "$SXLV_CPU_CUR" "$SXLV_CPU_PREV" 2>/dev/null || true
 }
-trap 'rm -f "$SXLV_CPU_PREV" "$SXLV_CPU_CUR"; [ -n "$SXLV_CPU_PID" ] && kill "$SXLV_CPU_PID" 2>/dev/null' EXIT INT TERM
+SXLV_EMIT_HEALTH() {
+    SXLV_NOW="$(date +%s 2>/dev/null || echo 0)"
+    [ $((SXLV_NOW-SXLV_LAST_HEALTH_TS)) -lt 30 ] && return
+    SXLV_LAST_HEALTH_TS="$SXLV_NOW"
+
+    SXLV_TMP_USE="$(df -P /tmp 2>/dev/null | awk 'NR==2 { gsub("%", "", $5); print $5 }')"
+    case "$SXLV_TMP_USE" in
+        ''|*[!0-9]*) ;;
+        *)
+            if [ "$SXLV_TMP_USE" -ge 95 ]; then
+                printf '__SXLV_WARNING__%sSophos /tmp is %s%% full. Event DB commits can stall; free space or flush device reports on the firewall.\n' "$SXLV_SEP" "$SXLV_TMP_USE"
+            fi
+            ;;
+    esac
+
+    if [ -r /log/garner.log ] && tail -n 120 /log/garner.log 2>/dev/null | grep -Eiq 'database or disk is full|Transaction Couldn|No space left'; then
+        printf '__SXLV_WARNING__%sSophos logging service reports failed Event DB commits in /log/garner.log. Live log data may be stale until firewall logging is repaired.\n' "$SXLV_SEP"
+    fi
+}
+SXLV_START_FAST_FIREWALL_STREAM() {
+    if [ ! -x /bin/conntrack ]; then
+        printf '__SXLV_WARNING__%s/bin/conntrack is not available. Fast firewall stream is disabled.\n' "$SXLV_SEP"
+        return
+    fi
+
+    ( /bin/conntrack -E -b 4194304 -e NEW 2>/dev/null | while IFS= read -r SXLV_CT_ROW; do
+        [ -n "$SXLV_CT_ROW" ] && printf '__SXLV_CONNTRACK__%s%s\n' "$SXLV_SEP" "$SXLV_CT_ROW"
+    done ) &
+    SXLV_CT_PID=$!
+    SXLV_REGISTER_BG "$SXLV_CT_PID"
+    printf '__SXLV_DIAG__%sFast conntrack stream started\n' "$SXLV_SEP"
+}
+trap 'rm -f "$SXLV_CPU_PREV" "$SXLV_CPU_CUR"; [ -n "$SXLV_CPU_PID" ] && kill "$SXLV_CPU_PID" 2>/dev/null; for SXLV_PID in $SXLV_BG_PIDS; do kill "$SXLV_PID" 2>/dev/null; done' EXIT INT TERM
 """;
     }
 
@@ -269,7 +311,7 @@ trap 'rm -f "$SXLV_CPU_PREV" "$SXLV_CPU_CUR"; [ -n "$SXLV_CPU_PID" ] && kill "$S
         var escapedFiles = files.Select(file => "'" + file.Replace("'", "'\\''", StringComparison.Ordinal) + "'");
         return BuildCpuShellPrelude() + """
 
-( while true; do SXLV_EMIT_CPU; sleep 1; done ) &
+( while true; do SXLV_EMIT_CPU; SXLV_EMIT_HEALTH; sleep 1; done ) &
 SXLV_CPU_PID=$!
 """ + "tail -f -n 50 " + string.Join(' ', escapedFiles);
     }
@@ -301,6 +343,52 @@ SXLV_CPU_PID=$!
         {
             throw new InvalidOperationException($"Unsafe log file: {path}");
         }
+    }
+
+    private static string BuildFastFileTailCommand(FirewallProfile profile)
+    {
+        var files = LogDefinition.All
+            .SelectMany(log => log.TroubleshootingFiles)
+            .Concat(ParseExtraFiles(profile.ExtraLogFiles))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        foreach (var file in files)
+        {
+            ValidateLogPath(file);
+        }
+
+        var builder = new StringBuilder();
+        builder.AppendLine("""
+SXLV_TAIL_FILE() {
+    SXLV_FILE="$1"
+    [ -r "$SXLV_FILE" ] || return
+    ( tail -f -n 0 "$SXLV_FILE" 2>/dev/null | while IFS= read -r SXLV_FILE_ROW; do
+        [ -n "$SXLV_FILE_ROW" ] && printf '__SXLV_FILE__%s%s%s%s\n' "$SXLV_SEP" "$SXLV_FILE" "$SXLV_SEP" "$SXLV_FILE_ROW"
+    done ) &
+    SXLV_TAIL_PID=$!
+    SXLV_REGISTER_BG "$SXLV_TAIL_PID"
+}
+SXLV_START_FAST_FILE_TAILS() {
+""");
+
+        foreach (var escapedFile in files.Select(EscapeSingleQuotedShellValue))
+        {
+            builder.Append("    SXLV_TAIL_FILE ");
+            builder.AppendLine(escapedFile);
+        }
+
+        builder.AppendLine("""
+    printf '__SXLV_DIAG__%sFast file tails started for Sophos troubleshooting logs\n' "$SXLV_SEP"
+}
+""");
+
+        return builder.ToString();
+    }
+
+    private static string EscapeSingleQuotedShellValue(string value)
+    {
+        return "'" + value.Replace("'", "'\\''", StringComparison.Ordinal) + "'";
     }
 
     private static async Task SendSophosAdvancedShellBootstrapAsync(ShellStream shell, CancellationToken cancellationToken)
@@ -426,10 +514,39 @@ SXLV_CPU_PID=$!
                 }
                 break;
 
+            case "__SXLV_CONNTRACK__":
+                if (parts.Length > 1)
+                {
+                    foreach (var conntrackEntry in SophosLogParser.ParseConntrackFastEvents(parts[1]))
+                    {
+                        if (filter.IsMatch(conntrackEntry))
+                        {
+                            onEntry(conntrackEntry);
+                        }
+                    }
+                }
+                break;
+
+            case "__SXLV_FILE__":
+                if (parts.Length > 2
+                    && SophosLogParser.TryParseFastFileLine(parts[1], parts[2], out var fileEntry)
+                    && fileEntry is not null
+                    && filter.IsMatch(fileEntry))
+                {
+                    onEntry(fileEntry);
+                }
+                break;
+
             case "__SXLV_ERROR__":
                 var error = parts.Length > 1 ? "Error: " + parts[1] : "Error while reading the event DB.";
                 onStatus(error);
                 onDiagnostic(error);
+                break;
+
+            case "__SXLV_WARNING__":
+                var warning = parts.Length > 1 ? "Warning: " + parts[1] : "Warning from Sophos live log stream.";
+                onStatus(warning);
+                onDiagnostic(warning);
                 break;
 
             case "__SXLV_DIAG__":

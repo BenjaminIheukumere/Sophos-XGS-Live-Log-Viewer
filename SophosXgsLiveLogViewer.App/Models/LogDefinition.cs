@@ -35,6 +35,12 @@ public sealed record LogDefinition(string Key, string DisplayName, IReadOnlyList
 
     public bool MatchesEvent(LogEntry entry)
     {
+        if (AllowsFastFileFallback(Key)
+            && TroubleshootingFiles.Contains(entry.SourceLogFile, StringComparer.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
         var type = entry.LogType;
         var component = entry.Component;
         var subtype = entry.Subtype;
@@ -76,5 +82,19 @@ public sealed record LogDefinition(string Key, string DisplayName, IReadOnlyList
     private static bool ContainsAny(string value, params string[] needles)
     {
         return needles.Any(needle => value.Contains(needle, StringComparison.OrdinalIgnoreCase));
+    }
+
+    private static bool AllowsFastFileFallback(string key)
+    {
+        return key is "admin"
+            or "active_threat_response"
+            or "authentication"
+            or "email"
+            or "malware"
+            or "security_heartbeat"
+            or "system"
+            or "vpn"
+            or "web_server_protection"
+            or "zero_day_protection";
     }
 }

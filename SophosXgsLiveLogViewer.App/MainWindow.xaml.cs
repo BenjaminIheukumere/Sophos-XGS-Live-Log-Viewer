@@ -18,6 +18,7 @@ namespace SophosXgsLiveLogViewer.App;
 
 public partial class MainWindow : Window
 {
+    private const string TimeColumnKey = "time";
     private const int MaxVisibleRows = 2_000;
     private const int MaxBufferedRows = 50_000;
     private const int MaxUiBatchSize = 500;
@@ -31,7 +32,8 @@ public partial class MainWindow : Window
     private readonly ObservableCollection<CpuUsageItem> _cpuUsageItems = [];
     private readonly List<FieldOption> _filterFieldOptions = [];
     private readonly Dictionary<string, HashSet<string>> _availableFieldsByLog = new(StringComparer.OrdinalIgnoreCase);
-    private readonly Dictionary<string, HashSet<string>> _extraColumnsByLog = new(StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<string, HashSet<string>> _selectedColumnsByLogMode = new(StringComparer.OrdinalIgnoreCase);
+    private readonly HashSet<string> _customizedColumnSelections = new(StringComparer.OrdinalIgnoreCase);
     private readonly SshLogStreamService _streamService = new();
     private readonly DemoLogStreamService _demoStreamService = new();
     private readonly DispatcherTimer _entryDrainTimer;
@@ -45,6 +47,7 @@ public partial class MainWindow : Window
     private bool _isConnected;
     private bool _manualDisconnectRequested;
     private bool _suppressLogSelectionSave;
+    private bool _isDetailedMode;
 
     public MainWindow()
     {
@@ -58,6 +61,8 @@ public partial class MainWindow : Window
         CpuItemsControl.ItemsSource = _cpuUsageItems;
         FilterConnectorBox.ItemsSource = new[] { "AND", "OR" };
         FilterConnectorBox.SelectedIndex = 0;
+        StreamModeToggle.IsChecked = false;
+        UpdateStreamModeToggle();
         FilterOperatorBox.ItemsSource = new[] { "Equals", "Not equals", "Contains", "Not contains", "Starts with", "Ends with" };
         FilterOperatorBox.SelectedIndex = 0;
         CaptureDurationBox.ItemsSource = new[] { "30s", "60s", "5m" };
@@ -180,7 +185,7 @@ public partial class MainWindow : Window
             return;
         }
 
-        var selectedLogs = LogDefinition.All.ToList();
+        var selectedLogs = new[] { _activeLog }.ToList();
 
         _streamCts = new CancellationTokenSource();
         _manualDisconnectRequested = false;
@@ -448,7 +453,7 @@ public partial class MainWindow : Window
         var rows = _entryBuffer
             .Where(entry => entry.ReceivedAt >= windowStart
                 && entry.ReceivedAt <= capturedAt
-                && MatchesSelectedLogCategory(entry)
+                && MatchesSelectedLogAndMode(entry)
                 && MatchesFilterConditions(entry))
             .ToList();
 
@@ -502,47 +507,55 @@ public partial class MainWindow : Window
     private void ColumnPicker_Click(object sender, RoutedEventArgs e)
     {
         var availableFields = GetAvailableFieldKeys();
-        var defaultFields = GetDefaultFieldKeys(availableFields);
-        var extraFields = GetSelectedExtraFields();
+        var availableColumns = GetAvailableColumnKeys(availableFields);
+        var selectedColumns = GetSelectedColumnKeys(availableColumns);
         var menu = new ContextMenu
         {
             PlacementTarget = ColumnPickerButton
         };
 
-        var selectableFields = availableFields
-            .Except(defaultFields, StringComparer.OrdinalIgnoreCase)
-            .OrderBy(field => field, StringComparer.OrdinalIgnoreCase)
-            .ToList();
-
-        if (selectableFields.Count == 0)
+        if (availableColumns.Count == 0)
         {
             menu.Items.Add(new MenuItem
             {
-                Header = availableFields.Count == 0 ? "No fields observed yet" : "No extra fields available",
+                Header = "No fields observed yet",
                 IsEnabled = false
             });
         }
         else
         {
-            foreach (var field in selectableFields)
+            var defaultColumns = GetDefaultColumnKeys(availableFields);
+            foreach (var field in availableColumns)
             {
                 var item = new MenuItem
                 {
-                    Header = ColumnNameFormatter.ToDisplayName(field),
+                    Header = defaultColumns.Contains(field, StringComparer.OrdinalIgnoreCase)
+                        ? ColumnNameFormatter.ToDisplayName(field) + "  (default)"
+                        : ColumnNameFormatter.ToDisplayName(field),
                     ToolTip = field,
                     IsCheckable = true,
-                    IsChecked = extraFields.Contains(field)
+                    IsChecked = selectedColumns.Contains(field)
                 };
 
                 item.Click += (_, _) =>
                 {
+                    var selectionKey = GetColumnSelectionKey();
                     if (item.IsChecked)
                     {
-                        extraFields.Add(field);
+                        _customizedColumnSelections.Add(selectionKey);
+                        selectedColumns.Add(field);
                     }
                     else
                     {
-                        extraFields.Remove(field);
+                        if (selectedColumns.Count <= 1)
+                        {
+                            item.IsChecked = true;
+                            SetStatus("At least one column must stay visible.");
+                            return;
+                        }
+
+                        _customizedColumnSelections.Add(selectionKey);
+                        selectedColumns.Remove(field);
                     }
 
                     RebuildColumns();
@@ -659,6 +672,26 @@ public partial class MainWindow : Window
         }.ShowDialog();
     }
 
+    private void StreamModeToggle_Click(object sender, RoutedEventArgs e)
+    {
+        _isDetailedMode = StreamModeToggle.IsChecked == true;
+        _pendingWhilePaused = 0;
+        UpdateStreamModeToggle();
+        RebuildActiveFieldCache();
+        RebuildVisibleRows();
+        SetStatus(_isDetailedMode
+            ? "Detailed mode: showing enriched Event DB rows."
+            : "Fast mode: showing immediate live stream rows.");
+    }
+
+    private void UpdateStreamModeToggle()
+    {
+        StreamModeToggle.Content = _isDetailedMode ? "Detailed mode" : "Fast mode";
+        StreamModeToggle.ToolTip = _isDetailedMode
+            ? "Detailed mode uses enriched Sophos Event DB rows. Click to switch to fast live stream."
+            : "Fast mode uses immediate conntrack and raw log tails. Click to switch to detailed Event DB rows.";
+    }
+
     private void OnLogEntryReceived(LogEntry entry)
     {
         _pendingEntries.Enqueue(entry);
@@ -686,7 +719,7 @@ public partial class MainWindow : Window
                 _entryBuffer.Dequeue();
             }
 
-            var matchesActiveLog = MatchesSelectedLogCategory(entry);
+            var matchesActiveLog = MatchesSelectedLogAndMode(entry);
             if (matchesActiveLog)
             {
                 activeFieldsChanged |= AddObservedFields(_activeLog.Key, entry);
@@ -697,7 +730,7 @@ public partial class MainWindow : Window
                 continue;
             }
 
-            if (PauseLiveScrollBox.IsChecked == true)
+            if (PauseLiveScrollButton.IsChecked == true)
             {
                 _pendingWhilePaused++;
                 continue;
@@ -727,14 +760,14 @@ public partial class MainWindow : Window
         }
     }
 
-    private void PauseLiveScrollBox_Checked(object sender, RoutedEventArgs e)
+    private void PauseLiveScrollButton_Checked(object sender, RoutedEventArgs e)
     {
         _pendingWhilePaused = 0;
         UpdateCounters();
         SetStatus("Live display paused. Incoming matching entries are buffered.");
     }
 
-    private void PauseLiveScrollBox_Unchecked(object sender, RoutedEventArgs e)
+    private void PauseLiveScrollButton_Unchecked(object sender, RoutedEventArgs e)
     {
         var pending = _pendingWhilePaused;
         _pendingWhilePaused = 0;
@@ -807,14 +840,31 @@ public partial class MainWindow : Window
     private void UpdateSelectedFilesText()
     {
         var availableFields = GetAvailableFieldKeys().Count;
-        var visibleFields = GetVisibleFieldKeys().Count;
-        var extraFields = GetSelectedExtraFields().Count;
-        SelectedFilesText.Text = $"{_activeLog.DisplayName}. {visibleFields:N0}/{availableFields:N0} field column(s) visible, {extraFields:N0} added via picker. Log switches stay in the same SSH session.";
+        var visibleColumns = GetVisibleColumnKeys().Count;
+        var mode = _isDetailedMode ? "Detailed Event DB mode" : "Fast live mode";
+        SelectedFilesText.Text = $"{_activeLog.DisplayName}. {mode}. {visibleColumns:N0}/{availableFields + 1:N0} column(s) visible. Log and mode switches stay in the same SSH session.";
     }
 
     private bool MatchesSelectedLogCategory(LogEntry entry)
     {
         return _activeLog.MatchesEvent(entry);
+    }
+
+    private bool MatchesSelectedLogAndMode(LogEntry entry)
+    {
+        return MatchesSelectedLogCategory(entry) && MatchesCurrentStreamMode(entry);
+    }
+
+    private bool MatchesCurrentStreamMode(LogEntry entry)
+    {
+        if (SelectedProfile()?.SourceMode == LogSourceMode.Demo)
+        {
+            return true;
+        }
+
+        return _isDetailedMode
+            ? string.Equals(entry.SourceLogFile, "eventdb", StringComparison.OrdinalIgnoreCase)
+            : !string.Equals(entry.SourceLogFile, "eventdb", StringComparison.OrdinalIgnoreCase);
     }
 
     private void SyncProfilesToVault()
@@ -859,17 +909,18 @@ public partial class MainWindow : Window
 
     private void UpdateCounters()
     {
-        var paused = PauseLiveScrollBox.IsChecked == true
+        var paused = PauseLiveScrollButton.IsChecked == true
             ? $"   Paused: {_pendingWhilePaused:N0}"
             : string.Empty;
-        CountersText.Text = $"Visible window: {_entries.Count:N0}/{MaxVisibleRows:N0}   Buffer: {_entryBuffer.Count:N0}/{MaxBufferedRows:N0}   Received: {_received:N0}   Displayed: {_displayed:N0}{paused}";
+        var mode = _isDetailedMode ? "Detailed" : "Fast";
+        CountersText.Text = $"Mode: {mode}   Visible window: {_entries.Count:N0}/{MaxVisibleRows:N0}   Buffer: {_entryBuffer.Count:N0}/{MaxBufferedRows:N0}   Received: {_received:N0}   Displayed: {_displayed:N0}{paused}";
     }
 
     private void RebuildVisibleRows()
     {
         var visibleRows = _entryBuffer
             .Reverse()
-            .Where(entry => MatchesSelectedLogCategory(entry) && MatchesFilterConditions(entry))
+            .Where(entry => MatchesSelectedLogAndMode(entry) && MatchesFilterConditions(entry))
             .Take(MaxVisibleRows)
             .ToList();
 
@@ -885,7 +936,7 @@ public partial class MainWindow : Window
 
     private void ScrollNewestIntoView()
     {
-        if (PauseLiveScrollBox.IsChecked == true || _entries.Count == 0)
+        if (PauseLiveScrollButton.IsChecked == true || _entries.Count == 0)
         {
             return;
         }
@@ -938,16 +989,19 @@ public partial class MainWindow : Window
     {
         return field switch
         {
-            "time" => entry.OccurredAt.ToString("yyyy-MM-dd HH:mm:ss.fff"),
+            "time" => entry.OccurredAt.ToString("yyyy-MM-dd HH:mm:ss"),
             _ => entry.Fields.TryGetValue(field, out var value) ? value : string.Empty
         };
     }
 
     private void RebuildColumns()
     {
-        var fieldKeys = GetVisibleFieldKeys();
+        var columnKeys = GetVisibleColumnKeys();
+        var fieldKeys = columnKeys
+            .Where(key => !string.Equals(key, TimeColumnKey, StringComparison.OrdinalIgnoreCase))
+            .ToList();
         var currentSignature = string.Join('\u001f', LogGrid.Columns.OfType<DataGridTextColumn>().Select(column => column.SortMemberPath));
-        var nextSignature = string.Join('\u001f', new[] { "time" }.Concat(fieldKeys));
+        var nextSignature = string.Join('\u001f', columnKeys);
 
         if (string.Equals(currentSignature, nextSignature, StringComparison.Ordinal))
         {
@@ -956,14 +1010,17 @@ public partial class MainWindow : Window
 
         LogGrid.Columns.Clear();
         var textCellStyle = (Style)FindResource("LogGridTextCellStyle");
-        LogGrid.Columns.Add(new DataGridTextColumn
+        if (columnKeys.Contains(TimeColumnKey, StringComparer.OrdinalIgnoreCase))
         {
-            Header = ColumnNameFormatter.ToDisplayName("time"),
-            Binding = new Binding(nameof(LogEntry.OccurredAt)) { StringFormat = "HH:mm:ss.fff" },
-            ElementStyle = textCellStyle,
-            SortMemberPath = "time",
-            Width = 115
-        });
+            LogGrid.Columns.Add(new DataGridTextColumn
+            {
+                Header = ColumnNameFormatter.ToDisplayName(TimeColumnKey),
+                Binding = new Binding(nameof(LogEntry.OccurredAt)) { StringFormat = "HH:mm:ss" },
+                ElementStyle = textCellStyle,
+                SortMemberPath = TimeColumnKey,
+                Width = 92
+            });
+        }
 
         foreach (var key in fieldKeys)
         {
@@ -978,17 +1035,19 @@ public partial class MainWindow : Window
         }
     }
 
+    private List<string> GetVisibleColumnKeys()
+    {
+        var availableFields = GetAvailableFieldKeys();
+        var availableColumns = GetAvailableColumnKeys(availableFields);
+        return GetSelectedColumnKeys(availableColumns)
+            .Where(field => availableColumns.Contains(field, StringComparer.OrdinalIgnoreCase))
+            .ToList();
+    }
+
     private List<string> GetVisibleFieldKeys()
     {
-        var available = GetAvailableFieldKeys();
-        var defaults = GetDefaultFieldKeys(available);
-        var extras = GetSelectedExtraFields()
-            .Where(field => available.Contains(field, StringComparer.OrdinalIgnoreCase))
-            .Except(defaults, StringComparer.OrdinalIgnoreCase);
-
-        return defaults
-            .Concat(extras)
-            .Distinct(StringComparer.OrdinalIgnoreCase)
+        return GetVisibleColumnKeys()
+            .Where(field => !string.Equals(field, TimeColumnKey, StringComparison.OrdinalIgnoreCase))
             .ToList();
     }
 
@@ -996,6 +1055,7 @@ public partial class MainWindow : Window
     {
         return GetObservedFields(_activeLog.Key)
             .Where(key => !string.IsNullOrWhiteSpace(key))
+            .Where(key => _isDetailedMode || !LogColumnPolicy.IsFastModeHiddenField(key))
             .OrderBy(key => key, StringComparer.OrdinalIgnoreCase)
             .ToList();
     }
@@ -1018,7 +1078,7 @@ public partial class MainWindow : Window
 
         foreach (var entry in _entryBuffer)
         {
-            if (MatchesSelectedLogCategory(entry))
+            if (MatchesSelectedLogAndMode(entry))
             {
                 AddObservedFields(_activeLog.Key, entry);
             }
@@ -1046,15 +1106,53 @@ public partial class MainWindow : Window
         return LogColumnPolicy.SelectDefaultFields(_activeLog, availableFields);
     }
 
-    private HashSet<string> GetSelectedExtraFields()
+    private List<string> GetAvailableColumnKeys(IEnumerable<string> availableFields)
     {
-        if (!_extraColumnsByLog.TryGetValue(_activeLog.Key, out var fields))
+        return new[] { TimeColumnKey }
+            .Concat(availableFields)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+    }
+
+    private List<string> GetDefaultColumnKeys(IEnumerable<string> availableFields)
+    {
+        return new[] { TimeColumnKey }
+            .Concat(GetDefaultFieldKeys(availableFields))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+    }
+
+    private HashSet<string> GetSelectedColumnKeys(IReadOnlyList<string> availableColumns)
+    {
+        var key = GetColumnSelectionKey();
+        var hasCustomSelection = _customizedColumnSelections.Contains(key);
+        if (!_selectedColumnsByLogMode.TryGetValue(key, out var fields))
         {
-            fields = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-            _extraColumnsByLog[_activeLog.Key] = fields;
+            fields = new HashSet<string>(GetDefaultColumnKeys(GetAvailableFieldKeys()), StringComparer.OrdinalIgnoreCase);
+            _selectedColumnsByLogMode[key] = fields;
+        }
+        else if (!hasCustomSelection)
+        {
+            fields.Clear();
+            foreach (var field in GetDefaultColumnKeys(GetAvailableFieldKeys()))
+            {
+                fields.Add(field);
+            }
+        }
+
+        fields.RemoveWhere(field => !availableColumns.Contains(field, StringComparer.OrdinalIgnoreCase));
+        if (fields.Count == 0 && availableColumns.Count > 0)
+        {
+            fields.Add(availableColumns[0]);
         }
 
         return fields;
+    }
+
+    private string GetColumnSelectionKey()
+    {
+        var mode = _isDetailedMode ? "detailed" : "fast";
+        return $"{_activeLog.Key}:{mode}";
     }
 
     private static double GetColumnWidth(string key)
@@ -1071,7 +1169,7 @@ public partial class MainWindow : Window
     private static string GetGridCellValue(LogEntry entry, string field)
     {
         return string.Equals(field, "time", StringComparison.OrdinalIgnoreCase)
-            ? entry.OccurredAt.ToString("yyyy-MM-dd HH:mm:ss.fff")
+            ? entry.OccurredAt.ToString("yyyy-MM-dd HH:mm:ss")
             : GetEntryFieldValue(entry, field);
     }
 
@@ -1151,7 +1249,7 @@ public partial class MainWindow : Window
         }
 
         var values = _entryBuffer
-            .Where(MatchesSelectedLogCategory)
+            .Where(MatchesSelectedLogAndMode)
             .Select(entry => GetEntryFieldValue(entry, field))
             .Where(value => !string.IsNullOrWhiteSpace(value))
             .Distinct(StringComparer.OrdinalIgnoreCase)

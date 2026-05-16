@@ -23,7 +23,8 @@
                 BorderThickness="0,0,0,1">
             <DockPanel LastChildFill="False" Margin="14,0">
                 <StackPanel Orientation="Horizontal"
-                            VerticalAlignment="Center">
+                            VerticalAlignment="Center"
+                            Margin="0,0,32,0">
                     <Border Width="44"
                             Height="44"
                             Background="Transparent"
@@ -36,12 +37,12 @@
                                HorizontalAlignment="Center"
                                VerticalAlignment="Center" />
                     </Border>
-                    <StackPanel Margin="12,0,22,0" VerticalAlignment="Center">
+                    <StackPanel Margin="12,0,14,0" VerticalAlignment="Center">
                         <TextBlock Text="SOPHOS XGS LIVE LOG VIEWER"
                                    FontSize="17"
                                    FontWeight="SemiBold"
                                    Foreground="{StaticResource TextBrush}" />
-                        <TextBlock Text="by Benjamin Iheukumere | Safelink IT | SSH pull mode | sub-second refresh | local encrypted profiles"
+                        <TextBlock Text="by Benjamin Iheukumere | Safelink IT | SSH pull mode | sub-second refresh"
                                    FontSize="11"
                                    Foreground="{StaticResource MutedTextBrush}" />
                     </StackPanel>
@@ -50,17 +51,22 @@
                     <Button Content="Demo" Click="Demo_Click" />
                     <Button Content="Clear" Click="Clear_Click" />
                     <Button Content="About" Click="About_Click" />
-                    <CheckBox x:Name="PauseLiveScrollBox"
-                              Content="Pause scroll"
-                              Margin="12,0,0,0"
-                              VerticalAlignment="Center"
-                              Checked="PauseLiveScrollBox_Checked"
-                              Unchecked="PauseLiveScrollBox_Unchecked" />
+                    <ToggleButton x:Name="StreamModeToggle"
+                                  Content="Fast mode"
+                                  ToolTip="Switch between immediate fast stream and detailed Event DB rows"
+                                  Click="StreamModeToggle_Click" />
+                    <ToggleButton x:Name="PauseLiveScrollButton"
+                                  Content="Pause scroll"
+                                  Style="{StaticResource PauseToggleButtonStyle}"
+                                  ToolTip="Pause live scrolling while buffering incoming matching rows"
+                                  Checked="PauseLiveScrollButton_Checked"
+                                  Unchecked="PauseLiveScrollButton_Unchecked" />
                 </StackPanel>
 
                 <StackPanel DockPanel.Dock="Right"
                             Orientation="Horizontal"
-                            VerticalAlignment="Center">
+                            VerticalAlignment="Center"
+                            Margin="24,0,0,0">
                     <TextBlock Text="Profile"
                                Foreground="{StaticResource MutedTextBrush}"
                                VerticalAlignment="Center"

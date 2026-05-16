@@ -11,7 +11,7 @@ public sealed class LogColumnPolicyTests
         var log = LogDefinition.Find("firewall")!;
         string[] available =
         [
-            "log_component", "log_subtype", "status", "src_ip", "src_port", "dst_ip", "dst_port",
+            "log_type", "log_component", "log_subtype", "status", "src_ip", "src_port", "dst_ip", "dst_port",
             "protocol", "fw_rule_id", "fw_rule_name", "in_interface", "out_interface", "nat_rule_id",
             "nat_rule_name", "bytes_sent", "bytes_received", "packets_sent", "packets_received", "raw_id"
         ];
@@ -22,6 +22,8 @@ public sealed class LogColumnPolicyTests
         Assert.Contains("src_ip", selected);
         Assert.Contains("dst_ip", selected);
         Assert.Contains("dst_port", selected);
+        Assert.DoesNotContain("log_type", selected);
+        Assert.DoesNotContain("status", selected);
         Assert.DoesNotContain("raw_id", selected);
     }
 
@@ -34,5 +36,12 @@ public sealed class LogColumnPolicyTests
         var selected = LogColumnPolicy.SelectDefaultFields(log, available);
 
         Assert.All(selected, field => Assert.Contains(field, available));
+    }
+
+    [Fact]
+    public void IsFastModeHiddenField_HidesSyntheticSourceColumn()
+    {
+        Assert.True(LogColumnPolicy.IsFastModeHiddenField("source"));
+        Assert.False(LogColumnPolicy.IsFastModeHiddenField("src_ip"));
     }
 }

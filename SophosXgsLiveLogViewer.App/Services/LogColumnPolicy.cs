@@ -6,6 +6,17 @@ public static class LogColumnPolicy
 {
     public const int MaxDefaultFieldColumns = 10;
 
+    private static readonly HashSet<string> DefaultExcludedFields = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "log_type",
+        "status"
+    };
+
+    private static readonly HashSet<string> FastModeHiddenFields = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "source"
+    };
+
     public static IReadOnlyList<string> PreferredFieldOrder { get; } =
     [
         "log_type", "log_component", "log_subtype", "status", "message", "reason", "severity",
@@ -38,8 +49,14 @@ public static class LogColumnPolicy
 
         return order
             .Where(field => available.Contains(field, StringComparer.OrdinalIgnoreCase))
+            .Where(field => !DefaultExcludedFields.Contains(field))
             .Take(MaxDefaultFieldColumns)
             .ToList();
+    }
+
+    public static bool IsFastModeHiddenField(string field)
+    {
+        return FastModeHiddenFields.Contains(field);
     }
 
     public static IReadOnlyList<string> DefaultOrderFor(LogDefinition activeLog)
@@ -49,7 +66,7 @@ public static class LogColumnPolicy
             "firewall" =>
             [
                 "log_component", "log_subtype", "status", "src_ip", "dst_ip", "dst_port",
-                "protocol", "fw_rule_name", "in_interface", "out_interface"
+                "protocol", "fw_rule_id", "fw_rule_name", "in_interface", "out_interface"
             ],
             "web_filter" or "web_content_policy" or "ssl_tls_inspection" =>
             [

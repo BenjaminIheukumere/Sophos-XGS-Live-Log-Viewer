@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.IO;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using SophosXgsLiveLogViewer.App.Models;
@@ -82,6 +83,122 @@ public static partial class SophosLogParser
             .Select(pair => $"{pair.Key}=\"{pair.Value.Replace("\"", "\\\"", StringComparison.Ordinal)}\""));
 
         entry = BuildEntry(rawLine, "eventdb", fields);
+        return true;
+    }
+
+    public static bool TryParseConntrack(string rawLine, out LogEntry? entry)
+    {
+        var entries = ParseConntrackFastEvents(rawLine);
+        entry = entries.FirstOrDefault(entry => string.Equals(entry.LogType, "Firewall", StringComparison.OrdinalIgnoreCase));
+        return entry is not null;
+    }
+
+    public static IReadOnlyList<LogEntry> ParseConntrackFastEvents(string rawLine)
+    {
+        if (string.IsNullOrWhiteSpace(rawLine)
+            || !rawLine.Contains("orig-src=", StringComparison.OrdinalIgnoreCase)
+            || !rawLine.Contains("orig-dst=", StringComparison.OrdinalIgnoreCase))
+        {
+            return [];
+        }
+
+        var fields = ParseFields(rawLine);
+        NormalizeAliases(fields);
+
+        if (!fields.ContainsKey("src_ip") || !fields.ContainsKey("dst_ip"))
+        {
+            return [];
+        }
+
+        var eventMatch = ConntrackEventRegex().Match(rawLine);
+        if (eventMatch.Success)
+        {
+            fields["conntrack_event"] = eventMatch.Groups["event"].Value;
+        }
+
+        var action = fields.TryGetValue("fw_action", out var fwAction) ? fwAction : string.Empty;
+        if (string.Equals(action, "1", StringComparison.OrdinalIgnoreCase))
+        {
+            fields["status"] = "Allow";
+            fields["log_subtype"] = "Allowed";
+        }
+        else if (string.Equals(action, "0", StringComparison.OrdinalIgnoreCase))
+        {
+            fields["status"] = "Deny";
+            fields["log_subtype"] = "Denied";
+        }
+
+        if (fields.TryGetValue("startstamp", out var startStamp) && !fields.ContainsKey("event_timestamp"))
+        {
+            fields["event_timestamp"] = startStamp;
+        }
+
+        var entries = new List<LogEntry>
+        {
+            BuildFastConntrackEntry(rawLine, fields, "Firewall", IsNonZero(fields, "fw_rule_id") ? "Firewall Rule" : "Appliance Access", "Firewall")
+        };
+
+        if (IsNonZero(fields, "webfltid") || IsNonZero(fields, "catid"))
+        {
+            entries.Add(BuildFastConntrackEntry(rawLine, fields, "Content Filtering", "HTTP", "Web filter"));
+            entries.Add(BuildFastConntrackEntry(rawLine, fields, "Content Filtering", "Web Content Policy", "Web content policy"));
+        }
+
+        if (IsNonZero(fields, "appfltid") || IsNonZero(fields, "appid") || IsNonZero(fields, "appcatid"))
+        {
+            entries.Add(BuildFastConntrackEntry(rawLine, fields, "Content Filtering", "Application", "Application filter"));
+        }
+
+        if (IsNonZero(fields, "ips") || IsNonZero(fields, "ipspid") || IsNonZero(fields, "ips_nfqueue"))
+        {
+            entries.Add(BuildFastConntrackEntry(rawLine, fields, "IDP", "IPS", "IPS"));
+        }
+
+        if (IsNonZero(fields, "tlsruleid") || IsNonZero(fields, "icapid"))
+        {
+            entries.Add(BuildFastConntrackEntry(rawLine, fields, "SSL", "SSL/TLS Inspection", "SSL/TLS inspection"));
+        }
+
+        if (IsNonZero(fields, "sdwan_ruleid[0]")
+            || IsNonZero(fields, "sdwan_ruleid[1]")
+            || IsNonZero(fields, "sdwan_profileid[0]")
+            || IsNonZero(fields, "sdwan_profileid[1]"))
+        {
+            entries.Add(BuildFastConntrackEntry(rawLine, fields, "SD-WAN", "SD-WAN", "SD-WAN"));
+        }
+
+        if (IsNonZero(fields, "hb_src") || IsNonZero(fields, "hb_dst"))
+        {
+            entries.Add(BuildFastConntrackEntry(rawLine, fields, "Heartbeat", "Heartbeat", "Security Heartbeat"));
+        }
+
+        return entries;
+    }
+
+    public static bool TryParseFastFileLine(string sourceLogFile, string rawLine, out LogEntry? entry)
+    {
+        if (TryParse(rawLine, sourceLogFile, out entry))
+        {
+            return true;
+        }
+
+        if (string.IsNullOrWhiteSpace(rawLine))
+        {
+            entry = null;
+            return false;
+        }
+
+        var logDefinition = LogDefinition.All.FirstOrDefault(log =>
+            log.TroubleshootingFiles.Contains(sourceLogFile, StringComparer.OrdinalIgnoreCase));
+        var fields = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["log_type"] = logDefinition?.DisplayName ?? "File",
+            ["log_component"] = Path.GetFileName(sourceLogFile),
+            ["message"] = rawLine.Trim(),
+            ["log_file"] = sourceLogFile
+        };
+
+        entry = BuildEntry(rawLine, sourceLogFile, fields);
         return true;
     }
 
@@ -170,6 +287,10 @@ public static partial class SophosLogParser
         CopyAlias(fields, "destination_port", "dst_port");
         CopyAlias(fields, "dport", "dst_port");
         CopyAlias(fields, "dest_port", "dst_port");
+        CopyAlias(fields, "orig-src", "src_ip");
+        CopyAlias(fields, "orig-dst", "dst_ip");
+        CopyAlias(fields, "orig-sport", "src_port");
+        CopyAlias(fields, "orig-dport", "dst_port");
         CopyAlias(fields, "log_sub_type", "log_subtype");
         CopyAlias(fields, "logtype", "log_type");
         CopyAlias(fields, "log type", "log_type");
@@ -184,6 +305,10 @@ public static partial class SophosLogParser
         CopyAlias(fields, "severity", "priority");
         CopyAlias(fields, "rule_id", "fw_rule_id");
         CopyAlias(fields, "rule_name", "fw_rule_name");
+        CopyAlias(fields, "fwid", "fw_rule_id");
+        CopyAlias(fields, "natid", "nat_rule_id");
+        CopyAlias(fields, "devin", "in_interface");
+        CopyAlias(fields, "devout", "out_interface");
         CopyAlias(fields, "user", "user_name");
         CopyAlias(fields, "bytes_sent", "sent_bytes");
         CopyAlias(fields, "bytes_received", "recv_bytes");
@@ -319,6 +444,32 @@ public static partial class SophosLogParser
         return needles.Any(needle => value.Contains(needle, StringComparison.OrdinalIgnoreCase));
     }
 
-    [GeneratedRegex(@"(?<key>[A-Za-z_][A-Za-z0-9_\-.]*)=(?:""(?<quoted>[^""]*)""|(?<bare>[^\s""]+))", RegexOptions.Compiled)]
+    private static LogEntry BuildFastConntrackEntry(
+        string rawLine,
+        IReadOnlyDictionary<string, string> sourceFields,
+        string logType,
+        string component,
+        string label)
+    {
+        var fields = new Dictionary<string, string>(sourceFields, StringComparer.OrdinalIgnoreCase)
+        {
+            ["log_type"] = logType,
+            ["log_component"] = component
+        };
+
+        return BuildEntry(rawLine, "conntrack", fields);
+    }
+
+    private static bool IsNonZero(IReadOnlyDictionary<string, string> fields, string key)
+    {
+        return fields.TryGetValue(key, out var value)
+            && !string.IsNullOrWhiteSpace(value)
+            && !string.Equals(value, "0", StringComparison.Ordinal);
+    }
+
+    [GeneratedRegex(@"(?<key>[A-Za-z_][A-Za-z0-9_\-.\[\]]*)=(?:""(?<quoted>[^""]*)""|(?<bare>[^\s""]+))", RegexOptions.Compiled)]
     private static partial Regex KeyValueRegex();
+
+    [GeneratedRegex(@"\[(?<event>NEW|DESTROY|UPDATE)\]", RegexOptions.Compiled | RegexOptions.IgnoreCase)]
+    private static partial Regex ConntrackEventRegex();
 }

@@ -47,6 +47,21 @@ public sealed class LogDefinitionTests
     }
 
     [Fact]
+    public void MatchesEvent_MapsTroubleshootingFileSource()
+    {
+        var definition = LogDefinition.Find("system");
+        var entry = new LogEntry
+        {
+            SourceLogFile = "/log/syslog.log",
+            LogType = "File",
+            Component = "syslog.log"
+        };
+
+        Assert.NotNull(definition);
+        Assert.True(definition.MatchesEvent(entry));
+    }
+
+    [Fact]
     public void ToString_ReturnsDisplayName()
     {
         var definition = LogDefinition.Find("web_filter");

@@ -97,4 +97,58 @@ public sealed class SophosLogParserTests
         Assert.Equal(LogDisposition.Denied, entry.Disposition);
         Assert.Equal(17, entry.OccurredAt.Hour);
     }
+
+    [Fact]
+    public void TryParseConntrack_ParsesFastFirewallEvent()
+    {
+        const string raw = "    [NEW] proto=tcp proto-no=6 timeout=120 state=SYN_SENT orig-src=192.168.200.23 orig-dst=104.20.23.154 orig-sport=62086 orig-dport=443 devin=Port1 devout=Port2 fwid=6 natid=2 fw_action=1 startstamp=1778920047";
+
+        var parsed = SophosLogParser.TryParseConntrack(raw, out var entry);
+
+        Assert.True(parsed);
+        Assert.NotNull(entry);
+        Assert.Equal("conntrack", entry.SourceLogFile);
+        Assert.Equal("Firewall", entry.LogType);
+        Assert.Equal("Firewall Rule", entry.Component);
+        Assert.Equal("Allow", entry.Status);
+        Assert.Equal("192.168.200.23", entry.SourceIp);
+        Assert.Equal("104.20.23.154", entry.DestinationIp);
+        Assert.Equal("443", entry.DestinationPort);
+        Assert.Equal("6", entry.FirewallRule);
+        Assert.Equal(LogDisposition.Allowed, entry.Disposition);
+        Assert.False(entry.Fields.ContainsKey("source"));
+        Assert.False(entry.Fields.ContainsKey("message"));
+    }
+
+    [Fact]
+    public void ParseConntrackFastEvents_EmitsSecurityCategoriesFromPolicyIds()
+    {
+        const string raw = "    [NEW] proto=tcp proto-no=6 orig-src=192.168.200.23 orig-dst=104.20.23.154 orig-sport=62086 orig-dport=443 devin=Port1 devout=Port2 fwid=6 natid=2 fw_action=1 webfltid=4 appfltid=1 ips=5 ipspid=9 tlsruleid=3 sdwan_ruleid[0]=7 startstamp=1778920047";
+
+        var entries = SophosLogParser.ParseConntrackFastEvents(raw);
+
+        Assert.Contains(entries, entry => entry.LogType == "Firewall");
+        Assert.Contains(entries, entry => entry.LogType == "Content Filtering" && entry.Component == "HTTP");
+        Assert.Contains(entries, entry => entry.LogType == "Content Filtering" && entry.Component == "Application");
+        Assert.Contains(entries, entry => entry.LogType == "IDP" && entry.Component == "IPS");
+        Assert.Contains(entries, entry => entry.LogType == "SSL" && entry.Component == "SSL/TLS Inspection");
+        Assert.Contains(entries, entry => entry.LogType == "SD-WAN");
+    }
+
+    [Fact]
+    public void TryParseFastFileLine_CreatesGenericEntryForUnstructuredTroubleshootingLog()
+    {
+        var parsed = SophosLogParser.TryParseFastFileLine(
+            "/log/syslog.log",
+            "2026-05-16 08:03:54Z localhost sudo: admin opened shell",
+            out var entry);
+
+        Assert.True(parsed);
+        Assert.NotNull(entry);
+        Assert.Equal("/log/syslog.log", entry.SourceLogFile);
+        Assert.Equal("System", entry.LogType);
+        Assert.Equal("syslog.log", entry.Component);
+        Assert.Contains("opened shell", entry.Message);
+        Assert.False(entry.Fields.ContainsKey("source"));
+    }
 }

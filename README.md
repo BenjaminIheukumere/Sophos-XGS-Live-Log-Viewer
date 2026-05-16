@@ -41,14 +41,14 @@ The default source reads the Sophos event log database from `/tmp/eventlogs` or 
 
 ### Release build
 
-Download the latest Windows release from:
+Download the latest Windows executable from:
 
 `https://github.com/BenjaminIheukumere/Sophos-XGS-Live-Log-Viewer/releases`
 
-Extract the ZIP and run:
+Run:
 
 ```text
-Sophos XGS Live Log Viewer by Benjamin Iheukumere.exe
+Sophos XGS Live Log Viewer.exe
 ```
 
 ### Build from source
