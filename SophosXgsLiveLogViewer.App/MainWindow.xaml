@@ -80,10 +80,67 @@
                     <Button Content="Del" Click="DeleteProfile_Click" />
                 </StackPanel>
 
-                <StackPanel DockPanel.Dock="Right"
+            </DockPanel>
+        </Border>
+
+        <Border Grid.Row="1"
+                Background="{StaticResource PanelSurfaceBrush}"
+                BorderBrush="{StaticResource BorderBrushSoft}"
+                BorderThickness="0,0,0,1">
+            <Grid Margin="12,6">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="38" />
+                    <RowDefinition Height="38" />
+                </Grid.RowDefinitions>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+
+                <StackPanel Grid.Row="0"
+                            Grid.Column="0"
                             Orientation="Horizontal"
+                            VerticalAlignment="Center">
+                    <TextBlock Text="Filter"
+                               Foreground="{StaticResource MutedTextBrush}"
+                               VerticalAlignment="Center"
+                               Margin="0,0,8,0" />
+                    <ComboBox x:Name="FilterConnectorBox" Width="72" Margin="0,0,6,0" />
+                    <ComboBox x:Name="FilterFieldBox"
+                              Width="220"
+                              IsEditable="True"
+                              IsTextSearchEnabled="True"
+                              DisplayMemberPath="DisplayName"
+                              SelectedValuePath="Key"
+                              TextSearch.TextPath="DisplayName"
+                              SelectionChanged="FilterFieldBox_SelectionChanged"
+                              Margin="0,0,6,0" />
+                    <ComboBox x:Name="FilterOperatorBox" Width="135" Margin="0,0,6,0" />
+                    <ComboBox x:Name="FilterValueBox"
+                              Width="285"
+                              IsEditable="True"
+                              IsTextSearchEnabled="True"
+                              Margin="0,0,6,0" />
+                    <Button Content="Add" Click="AddFilter_Click" />
+                    <Button Content="Clear" Click="ResetFilter_Click" />
+                </StackPanel>
+
+                <StackPanel Grid.Row="0"
+                            Grid.Column="1"
+                            Orientation="Horizontal"
+                            HorizontalAlignment="Right"
                             VerticalAlignment="Center"
-                            Margin="0,0,18,0">
+                            Margin="18,0,14,0">
+                    <StackPanel.Style>
+                        <Style TargetType="StackPanel">
+                            <Setter Property="Visibility" Value="Collapsed" />
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding HasItems, ElementName=CpuItemsControl}" Value="True">
+                                    <Setter Property="Visibility" Value="Visible" />
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </StackPanel.Style>
                     <TextBlock Text="CPU"
                                Foreground="{StaticResource MutedTextBrush}"
                                VerticalAlignment="Center"
@@ -128,97 +185,82 @@
                         </ItemsControl.ItemTemplate>
                     </ItemsControl>
                 </StackPanel>
-            </DockPanel>
-        </Border>
 
-        <Border Grid.Row="1"
-                Background="{StaticResource PanelSurfaceBrush}"
-                BorderBrush="{StaticResource BorderBrushSoft}"
-                BorderThickness="0,0,0,1">
-            <Grid Margin="12,6">
-                <Grid.RowDefinitions>
-                    <RowDefinition Height="Auto" />
-                    <RowDefinition Height="Auto" />
-                </Grid.RowDefinitions>
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="*" />
-                    <ColumnDefinition Width="Auto" />
-                </Grid.ColumnDefinitions>
+                <Grid Grid.Row="1"
+                      Grid.Column="0"
+                      VerticalAlignment="Center">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+
+                    <StackPanel Grid.Column="0"
+                                Orientation="Horizontal"
+                                VerticalAlignment="Center">
+                        <Button Content="Import" Click="ImportFilters_Click" />
+                        <Button Content="Export" Click="ExportFilters_Click" />
+                        <Border Width="1"
+                                Height="24"
+                                Margin="10,0"
+                                Background="{StaticResource BorderBrushSoft}" />
+                        <TextBlock Text="Capture"
+                                   Foreground="{StaticResource MutedTextBrush}"
+                                   VerticalAlignment="Center"
+                                   Margin="0,0,6,0" />
+                        <ComboBox x:Name="CaptureDurationBox"
+                                  Width="76"
+                                  Margin="0,0,6,0" />
+                        <Button x:Name="CaptureButton"
+                                Content="Capture"
+                                ToolTip="Capture the selected recent time window to a ZIP with CSV, JSON, notes and metadata."
+                                Click="Capture_Click" />
+                    </StackPanel>
+
+                    <ScrollViewer Grid.Column="1"
+                                  Margin="14,0,0,0"
+                                  HorizontalScrollBarVisibility="Auto"
+                                  VerticalScrollBarVisibility="Disabled">
+                        <ItemsControl x:Name="ActiveFiltersItemsControl"
+                                      VerticalAlignment="Center">
+                            <ItemsControl.ItemsPanel>
+                                <ItemsPanelTemplate>
+                                    <StackPanel Orientation="Horizontal" />
+                                </ItemsPanelTemplate>
+                            </ItemsControl.ItemsPanel>
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <Border Margin="0,0,6,0"
+                                            Padding="8,4"
+                                            CornerRadius="4"
+                                            Background="#102535"
+                                            BorderBrush="{StaticResource AccentBrush}"
+                                            BorderThickness="1">
+                                        <StackPanel Orientation="Horizontal">
+                                            <TextBlock Text="{Binding DisplayText}"
+                                                       FontSize="11"
+                                                       Foreground="{StaticResource TextBrush}"
+                                                       VerticalAlignment="Center" />
+                                            <Button Content="x"
+                                                    Tag="{Binding}"
+                                                    MinHeight="0"
+                                                    Padding="7,0"
+                                                    Margin="7,0,0,0"
+                                                    Click="RemoveFilter_Click" />
+                                        </StackPanel>
+                                    </Border>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </ScrollViewer>
+                </Grid>
+
                 <TextBlock x:Name="CountersText"
+                           Grid.Row="1"
                            Grid.Column="1"
                            Foreground="{StaticResource AccentGreenBrush}"
+                           HorizontalAlignment="Right"
                            VerticalAlignment="Center"
-                           Margin="0,0,14,0" />
-                <WrapPanel Grid.Column="0" VerticalAlignment="Center">
-                    <TextBlock Text="Filter"
-                               Foreground="{StaticResource MutedTextBrush}"
-                               VerticalAlignment="Center"
-                               Margin="0,0,8,0" />
-                    <ComboBox x:Name="FilterConnectorBox" Width="72" Margin="0,0,6,0" />
-                    <ComboBox x:Name="FilterFieldBox"
-                              Width="185"
-                              IsEditable="True"
-                              IsTextSearchEnabled="True"
-                              DisplayMemberPath="DisplayName"
-                              SelectedValuePath="Key"
-                              TextSearch.TextPath="DisplayName"
-                              SelectionChanged="FilterFieldBox_SelectionChanged"
-                              Margin="0,0,6,0" />
-                    <ComboBox x:Name="FilterOperatorBox" Width="120" Margin="0,0,6,0" />
-                    <ComboBox x:Name="FilterValueBox"
-                              Width="245"
-                              IsEditable="True"
-                              IsTextSearchEnabled="True"
-                              Margin="0,0,6,0" />
-                    <Button Content="Add" Click="AddFilter_Click" />
-                    <Button Content="Clear" Click="ResetFilter_Click" />
-                    <Button Content="Import" Click="ImportFilters_Click" />
-                    <Button Content="Export" Click="ExportFilters_Click" />
-                    <TextBlock Text="Capture"
-                               Foreground="{StaticResource MutedTextBrush}"
-                               VerticalAlignment="Center"
-                               Margin="14,0,6,0" />
-                    <ComboBox x:Name="CaptureDurationBox"
-                              Width="76"
-                              Margin="0,0,6,0" />
-                    <Button x:Name="CaptureButton"
-                            Content="Capture"
-                            ToolTip="Capture the selected recent time window to a ZIP with CSV, JSON, notes and metadata."
-                            Click="Capture_Click" />
-                </WrapPanel>
-                <ItemsControl x:Name="ActiveFiltersItemsControl"
-                              Grid.Row="1"
-                              Grid.ColumnSpan="2"
-                              Margin="38,6,0,0">
-                    <ItemsControl.ItemsPanel>
-                        <ItemsPanelTemplate>
-                            <WrapPanel />
-                        </ItemsPanelTemplate>
-                    </ItemsControl.ItemsPanel>
-                    <ItemsControl.ItemTemplate>
-                        <DataTemplate>
-                            <Border Margin="0,0,6,4"
-                                    Padding="8,4"
-                                    CornerRadius="4"
-                                    Background="#102535"
-                                    BorderBrush="{StaticResource AccentBrush}"
-                                    BorderThickness="1">
-                                <StackPanel Orientation="Horizontal">
-                                    <TextBlock Text="{Binding DisplayText}"
-                                               FontSize="11"
-                                               Foreground="{StaticResource TextBrush}"
-                                               VerticalAlignment="Center" />
-                                    <Button Content="x"
-                                            Tag="{Binding}"
-                                            MinHeight="0"
-                                            Padding="7,0"
-                                            Margin="7,0,0,0"
-                                            Click="RemoveFilter_Click" />
-                                </StackPanel>
-                            </Border>
-                        </DataTemplate>
-                    </ItemsControl.ItemTemplate>
-                </ItemsControl>
+                           Margin="18,0,14,0" />
             </Grid>
         </Border>
 

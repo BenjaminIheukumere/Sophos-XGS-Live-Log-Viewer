@@ -21,7 +21,7 @@ It is built for firewall troubleshooting when you do not want to deploy or recon
   * Per-firewall profiles
   * Local encrypted credential vault protected by a master password
   * Strict SSH mode by default with host key trust-on-first-use and fingerprint pinning
-  * Appliance CPU usage display
+  * Appliance CPU usage display after live firewall telemetry is available
   * Demo mode for parser, filter and UI testing without a firewall
 
 * * *

@@ -190,6 +190,7 @@ public partial class MainWindow : Window
         _streamCts = new CancellationTokenSource();
         _manualDisconnectRequested = false;
         _isConnected = true;
+        ClearCpuUsage();
         ConnectButton.IsEnabled = false;
         DisconnectButton.IsEnabled = true;
         ProfileCombo.IsEnabled = false;
@@ -215,6 +216,7 @@ public partial class MainWindow : Window
             _streamCts?.Dispose();
             _streamCts = null;
             _isConnected = false;
+            ClearCpuUsage();
             ConnectButton.IsEnabled = true;
             DisconnectButton.IsEnabled = false;
             ProfileCombo.IsEnabled = true;
@@ -295,6 +297,7 @@ public partial class MainWindow : Window
 
         _streamCts = new CancellationTokenSource();
         _isConnected = true;
+        ClearCpuUsage();
         ConnectButton.IsEnabled = false;
         DisconnectButton.IsEnabled = true;
         ProfileCombo.IsEnabled = false;
@@ -319,6 +322,7 @@ public partial class MainWindow : Window
             _streamCts?.Dispose();
             _streamCts = null;
             _isConnected = false;
+            ClearCpuUsage();
             ConnectButton.IsEnabled = true;
             DisconnectButton.IsEnabled = false;
             ProfileCombo.IsEnabled = true;
@@ -332,6 +336,7 @@ public partial class MainWindow : Window
         _entryBuffer.Clear();
         _availableFieldsByLog.Clear();
         _diagnostics.Clear();
+        ClearCpuUsage();
         _received = 0;
         _displayed = 0;
         _pendingWhilePaused = 0;
@@ -806,6 +811,11 @@ public partial class MainWindow : Window
         }
     }
 
+    private void ClearCpuUsage()
+    {
+        _cpuUsageItems.Clear();
+    }
+
     private bool TrustUnknownHostKey(FirewallProfile profile, string fingerprint)
     {
         if (!string.IsNullOrWhiteSpace(profile.ExpectedHostKeySha256))
@@ -845,14 +855,9 @@ public partial class MainWindow : Window
         SelectedFilesText.Text = $"{_activeLog.DisplayName}. {mode}. {visibleColumns:N0}/{availableFields + 1:N0} column(s) visible. Log and mode switches stay in the same SSH session.";
     }
 
-    private bool MatchesSelectedLogCategory(LogEntry entry)
-    {
-        return _activeLog.MatchesEvent(entry);
-    }
-
     private bool MatchesSelectedLogAndMode(LogEntry entry)
     {
-        return MatchesSelectedLogCategory(entry) && MatchesCurrentStreamMode(entry);
+        return _activeLog.MatchesEvent(entry) && MatchesCurrentStreamMode(entry);
     }
 
     private bool MatchesCurrentStreamMode(LogEntry entry)
@@ -1044,13 +1049,6 @@ public partial class MainWindow : Window
             .ToList();
     }
 
-    private List<string> GetVisibleFieldKeys()
-    {
-        return GetVisibleColumnKeys()
-            .Where(field => !string.Equals(field, TimeColumnKey, StringComparison.OrdinalIgnoreCase))
-            .ToList();
-    }
-
     private List<string> GetAvailableFieldKeys()
     {
         return GetObservedFields(_activeLog.Key)
@@ -1101,11 +1099,6 @@ public partial class MainWindow : Window
         return changed;
     }
 
-    private List<string> GetDefaultFieldKeys(IEnumerable<string> availableFields)
-    {
-        return LogColumnPolicy.SelectDefaultFields(_activeLog, availableFields);
-    }
-
     private List<string> GetAvailableColumnKeys(IEnumerable<string> availableFields)
     {
         return new[] { TimeColumnKey }
@@ -1117,7 +1110,7 @@ public partial class MainWindow : Window
     private List<string> GetDefaultColumnKeys(IEnumerable<string> availableFields)
     {
         return new[] { TimeColumnKey }
-            .Concat(GetDefaultFieldKeys(availableFields))
+            .Concat(LogColumnPolicy.SelectDefaultFields(_activeLog, availableFields))
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToList();
     }
