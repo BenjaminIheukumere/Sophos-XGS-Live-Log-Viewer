@@ -12,11 +12,14 @@ public sealed partial class SshLogStreamService : IDisposable
 {
     private const int InitialEventRows = 100;
 
+    private readonly object _sessionLock = new();
+    private readonly object _stopTaskLock = new();
     private readonly object _lineLock = new();
     private readonly StringBuilder _lineBuffer = new();
     private readonly List<string> _eventDbColumns = [];
     private SshClient? _client;
     private ShellStream? _shell;
+    private Task? _stopTask;
     private int _ignoredRowsReported;
     private bool _disposed;
 
@@ -48,89 +51,168 @@ public sealed partial class SshLogStreamService : IDisposable
         var connectionInfo = CreateConnectionInfo(profile);
 
         using var client = new SshClient(connectionInfo);
-        _client = client;
-        client.KeepAliveInterval = TimeSpan.FromSeconds(5);
-
-        client.ErrorOccurred += (_, args) =>
+        ShellStream? shell = null;
+        lock (_sessionLock)
         {
-            onDiagnostic("SSH error: " + args.Exception.Message);
-            linkedCts.Cancel();
-        };
-
-        client.HostKeyReceived += (_, args) =>
-        {
-            var fingerprint = BuildSha256Fingerprint(args.HostKey);
-
-            args.CanTrust = string.IsNullOrWhiteSpace(profile.ExpectedHostKeySha256)
-                ? trustUnknownHostKey(fingerprint)
-                : string.Equals(profile.ExpectedHostKeySha256.Trim(), fingerprint, StringComparison.OrdinalIgnoreCase);
-        };
-
-        onStatus($"Connecting to {profile.Host}:{profile.Port} ...");
-        onDiagnostic($"SSH target: {profile.Host}:{profile.Port}, source mode: {profile.SourceMode}");
-        onDiagnostic(SshAlgorithmPolicy.Describe(profile.SshSecurityMode));
-        await Task.Run(client.Connect, cancellationToken).ConfigureAwait(false);
-        onDiagnostic(
-            "SSH negotiated: "
-            + $"KEX={connectionInfo.CurrentKeyExchangeAlgorithm}, "
-            + $"HostKey={connectionInfo.CurrentHostKeyAlgorithm}, "
-            + $"C2S={connectionInfo.CurrentClientEncryption}/{connectionInfo.CurrentClientHmacAlgorithm}, "
-            + $"S2C={connectionInfo.CurrentServerEncryption}/{connectionInfo.CurrentServerHmacAlgorithm}");
-
-        onStatus("SSH connected. Starting live stream ...");
-        using var shell = client.CreateShellStream("sophos-live-log", 120, 40, 0, 0, 64 * 1024);
-        _shell = shell;
-
-        shell.DataReceived += (_, args) => ProcessData(args.Data, filter, onEntry, onStatus, onDiagnostic, onCpuUsage);
-
-        if (profile.UseSophosAdvancedShell)
-        {
-            await SendSophosAdvancedShellBootstrapAsync(shell, cancellationToken).ConfigureAwait(false);
+            _client = client;
         }
 
-        var command = profile.SourceMode == LogSourceMode.SophosTroubleshootingFiles
-            ? BuildTroubleshootingTailCommand(profile, selectedLogs)
-            : BuildEventDbCommand(profile);
-
-        shell.WriteLine(command);
-        onStatus(profile.SourceMode == LogSourceMode.SophosTroubleshootingFiles
-            ? $"Live: troubleshooting files, {selectedLogs.Count} log group(s)"
-            : $"Live: fast streams + Sophos event DB, initial {InitialEventRows} rows");
-
-        while (!linkedCts.IsCancellationRequested && client.IsConnected)
+        try
         {
-            await Task.Delay(250, linkedCts.Token).ConfigureAwait(false);
+            client.KeepAliveInterval = TimeSpan.FromSeconds(5);
+
+            client.ErrorOccurred += (_, args) =>
+            {
+                onDiagnostic("SSH error: " + args.Exception.Message);
+                linkedCts.Cancel();
+            };
+
+            client.HostKeyReceived += (_, args) =>
+            {
+                var fingerprint = BuildSha256Fingerprint(args.HostKey);
+
+                args.CanTrust = string.IsNullOrWhiteSpace(profile.ExpectedHostKeySha256)
+                    ? trustUnknownHostKey(fingerprint)
+                    : string.Equals(profile.ExpectedHostKeySha256.Trim(), fingerprint, StringComparison.OrdinalIgnoreCase);
+            };
+
+            onStatus($"Connecting to {profile.Host}:{profile.Port} ...");
+            onDiagnostic($"SSH target: {profile.Host}:{profile.Port}, source mode: {profile.SourceMode}");
+            onDiagnostic(SshAlgorithmPolicy.Describe(profile.SshSecurityMode));
+            await Task.Run(client.Connect, cancellationToken).ConfigureAwait(false);
+            onDiagnostic(
+                "SSH negotiated: "
+                + $"KEX={connectionInfo.CurrentKeyExchangeAlgorithm}, "
+                + $"HostKey={connectionInfo.CurrentHostKeyAlgorithm}, "
+                + $"C2S={connectionInfo.CurrentClientEncryption}/{connectionInfo.CurrentClientHmacAlgorithm}, "
+                + $"S2C={connectionInfo.CurrentServerEncryption}/{connectionInfo.CurrentServerHmacAlgorithm}");
+
+            onStatus("SSH connected. Starting live stream ...");
+            shell = client.CreateShellStream("sophos-live-log", 120, 40, 0, 0, 64 * 1024);
+            lock (_sessionLock)
+            {
+                _shell = shell;
+            }
+
+            using (shell)
+            {
+                shell.DataReceived += (_, args) => ProcessData(args.Data, filter, onEntry, onStatus, onDiagnostic, onCpuUsage);
+
+                if (profile.UseSophosAdvancedShell)
+                {
+                    await SendSophosAdvancedShellBootstrapAsync(shell, cancellationToken).ConfigureAwait(false);
+                }
+
+                var command = profile.SourceMode == LogSourceMode.SophosTroubleshootingFiles
+                    ? BuildTroubleshootingTailCommand(profile, selectedLogs)
+                    : BuildEventDbCommand(profile);
+
+                shell.WriteLine(command);
+                onStatus(profile.SourceMode == LogSourceMode.SophosTroubleshootingFiles
+                    ? $"Live: troubleshooting files, {selectedLogs.Count} log group(s)"
+                    : $"Live: fast streams + Sophos event DB, initial {InitialEventRows} rows");
+
+                while (!linkedCts.IsCancellationRequested && client.IsConnected)
+                {
+                    await Task.Delay(250, linkedCts.Token).ConfigureAwait(false);
+                }
+            }
         }
+        finally
+        {
+            lock (_sessionLock)
+            {
+                if (ReferenceEquals(_shell, shell))
+                {
+                    _shell = null;
+                }
+
+                if (ReferenceEquals(_client, client))
+                {
+                    _client = null;
+                }
+            }
+        }
+    }
+
+    public async Task<bool> StopAsync(TimeSpan timeout)
+    {
+        var stopTask = GetOrCreateStopTask();
+        var completedTask = await Task.WhenAny(stopTask, Task.Delay(timeout)).ConfigureAwait(false);
+        if (!ReferenceEquals(completedTask, stopTask))
+        {
+            return false;
+        }
+
+        await stopTask.ConfigureAwait(false);
+        return true;
     }
 
     public void Stop()
     {
-        try
-        {
-            _shell?.Write(new byte[] { 0x03 }, 0, 1);
-        }
-        catch (SshException)
-        {
-        }
-        catch (ObjectDisposedException)
-        {
-        }
+        StopCore();
+    }
 
-        _shell?.Dispose();
-        _shell = null;
-
-        try
+    private Task GetOrCreateStopTask()
+    {
+        lock (_stopTaskLock)
         {
-            if (_client?.IsConnected == true)
+            if (_stopTask is { IsCompleted: false })
             {
-                _client.Disconnect();
+                return _stopTask;
+            }
+
+            _stopTask = Task.Run(StopCore);
+            return _stopTask;
+        }
+    }
+
+    private void StopCore()
+    {
+        ShellStream? shell;
+        SshClient? client;
+        lock (_sessionLock)
+        {
+            shell = _shell;
+            client = _client;
+            _shell = null;
+            _client = null;
+        }
+
+        try
+        {
+            shell?.Write(new byte[] { 0x03 }, 0, 1);
+        }
+        catch (Exception)
+        {
+        }
+
+        try
+        {
+            shell?.Dispose();
+        }
+        catch (Exception)
+        {
+        }
+
+        try
+        {
+            if (client?.IsConnected == true)
+            {
+                client.Disconnect();
             }
         }
-        catch (ObjectDisposedException)
+        catch (Exception)
         {
         }
 
-        _client = null;
+        try
+        {
+            client?.Dispose();
+        }
+        catch (Exception)
+        {
+        }
     }
 
     public void Dispose()
@@ -140,8 +222,8 @@ public sealed partial class SshLogStreamService : IDisposable
             return;
         }
 
-        Stop();
         _disposed = true;
+        _ = StopAsync(TimeSpan.FromSeconds(1));
     }
 
     private static void ValidateProfile(FirewallProfile profile)

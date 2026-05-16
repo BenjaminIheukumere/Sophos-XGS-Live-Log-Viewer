@@ -23,6 +23,7 @@ public partial class MainWindow : Window
     private const int MaxVisibleRows = 2_000;
     private const int MaxBufferedRows = 50_000;
     private const int MaxUiBatchSize = 500;
+    private static readonly TimeSpan StreamStopTimeout = TimeSpan.FromSeconds(5);
 
     private readonly ObservableCollection<FirewallProfile> _profiles = [];
     private readonly LogEntryCollection _entries = [];
@@ -51,6 +52,9 @@ public partial class MainWindow : Window
     private bool _manualDisconnectRequested;
     private bool _suppressLogSelectionSave;
     private bool _isDetailedMode;
+    private bool _isClosing;
+    private bool _shutdownCompleted;
+    private bool _resourcesDisposed;
 
     public MainWindow()
     {
@@ -260,23 +264,29 @@ public partial class MainWindow : Window
         }
         finally
         {
-            _streamService.Stop();
+            await StopSshTransportAsync();
             _streamCts?.Dispose();
             _streamCts = null;
             _isConnected = false;
             ClearCpuUsage();
-            ConnectButton.IsEnabled = true;
-            DisconnectButton.IsEnabled = false;
-            ProfileCombo.IsEnabled = true;
+            if (!_isClosing)
+            {
+                ConnectButton.IsEnabled = true;
+                DisconnectButton.IsEnabled = false;
+                ProfileCombo.IsEnabled = true;
+            }
         }
     }
 
-    private void Disconnect_Click(object sender, RoutedEventArgs e)
+    private async void Disconnect_Click(object sender, RoutedEventArgs e)
     {
-        _manualDisconnectRequested = true;
-        _streamCts?.Cancel();
-        _streamService.Stop();
-        SetStatus("Stopping ...");
+        if (!_isConnected)
+        {
+            return;
+        }
+
+        DisconnectButton.IsEnabled = false;
+        await RequestStreamStopAsync("Stopping ...");
     }
 
     private async Task RunSshConnectionLoopAsync(
@@ -326,7 +336,7 @@ public partial class MainWindow : Window
             }
             finally
             {
-                _streamService.Stop();
+                await StopSshTransportAsync();
             }
 
             await Task.Delay(reconnectDelay, cancellationToken);
@@ -1439,11 +1449,74 @@ public partial class MainWindow : Window
             : $"{duration.TotalSeconds:0}s";
     }
 
-    private void Window_Closing(object? sender, CancelEventArgs e)
+    private async void Window_Closing(object? sender, CancelEventArgs e)
     {
+        if (_shutdownCompleted)
+        {
+            DisposeLocalResources();
+            return;
+        }
+
+        e.Cancel = true;
+        if (_isClosing)
+        {
+            return;
+        }
+
+        _isClosing = true;
+        ConnectButton.IsEnabled = false;
+        DisconnectButton.IsEnabled = false;
+        ProfileCombo.IsEnabled = false;
+        SetStatus(_isConnected ? "Disconnecting SSH session ..." : "Closing ...");
+
+        try
+        {
+            _entryDrainTimer.Stop();
+            _updateCheckCts.Cancel();
+            await RequestStreamStopAsync(_isConnected ? "Disconnecting SSH session ..." : string.Empty);
+        }
+        finally
+        {
+            _shutdownCompleted = true;
+            DisposeLocalResources();
+            Close();
+        }
+    }
+
+    private async Task RequestStreamStopAsync(string status)
+    {
+        _manualDisconnectRequested = true;
+        _streamCts?.Cancel();
+        if (!string.IsNullOrWhiteSpace(status))
+        {
+            SetStatus(status);
+        }
+
+        await StopSshTransportAsync();
+    }
+
+    private async Task StopSshTransportAsync()
+    {
+        var stopped = await _streamService.StopAsync(StreamStopTimeout);
+        if (!stopped)
+        {
+            AddDiagnostic("SSH disconnect timed out. Continuing shutdown without waiting for the remote session.");
+        }
+    }
+
+    private void DisposeLocalResources()
+    {
+        if (_resourcesDisposed)
+        {
+            return;
+        }
+
+        _resourcesDisposed = true;
+        _entryDrainTimer.Stop();
         _updateCheckCts.Cancel();
         _updateCheckCts.Dispose();
-        _streamCts?.Cancel();
+        _streamCts?.Dispose();
+        _streamCts = null;
         _streamService.Dispose();
         _vault?.Dispose();
     }
