@@ -1,0 +1,67 @@
+<Window x:Class="SophosXgsLiveLogViewer.App.UpdateWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Update available"
+        Height="250"
+        Width="520"
+        ResizeMode="NoResize"
+        WindowStartupLocation="CenterOwner"
+        Icon="Assets/AppIcon.ico"
+        Background="{StaticResource AppSurfaceBrush}">
+    <Border Margin="16"
+            Padding="18"
+            CornerRadius="8"
+            Background="{StaticResource PanelSurfaceBrush}"
+            BorderBrush="{StaticResource AccentBrush}"
+            BorderThickness="1">
+        <Grid>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="*" />
+                <RowDefinition Height="Auto" />
+            </Grid.RowDefinitions>
+
+            <TextBlock Text="Update available"
+                       FontSize="18"
+                       FontWeight="SemiBold"
+                       Foreground="{StaticResource AccentBrush}" />
+
+            <TextBlock x:Name="VersionText"
+                       Grid.Row="1"
+                       Margin="0,10,0,0"
+                       Foreground="{StaticResource TextBrush}" />
+
+            <TextBlock x:Name="StatusText"
+                       Grid.Row="2"
+                       Margin="0,8,0,0"
+                       Text="Download and install the newer version now?"
+                       TextWrapping="Wrap"
+                       Foreground="{StaticResource MutedTextBrush}" />
+
+            <ProgressBar x:Name="DownloadProgressBar"
+                         Grid.Row="3"
+                         Height="18"
+                         Margin="0,18,0,0"
+                         Minimum="0"
+                         Maximum="100"
+                         Visibility="Collapsed" />
+
+            <StackPanel Grid.Row="4"
+                        Orientation="Horizontal"
+                        HorizontalAlignment="Right"
+                        Margin="0,18,0,0">
+                <Button x:Name="LaterButton"
+                        Content="No"
+                        Width="90"
+                        Click="Later_Click" />
+                <Button x:Name="UpdateNowButton"
+                        Content="Update now"
+                        Width="118"
+                        Margin="8,0,0,0"
+                        Click="UpdateNow_Click" />
+            </StackPanel>
+        </Grid>
+    </Border>
+</Window>

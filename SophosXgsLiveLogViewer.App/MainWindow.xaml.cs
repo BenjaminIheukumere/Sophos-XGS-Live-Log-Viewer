@@ -1,6 +1,7 @@
 using System.Collections.Concurrent;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
+using System.Diagnostics;
 using System.IO;
 using System.Runtime.InteropServices;
 using System.Windows;
@@ -36,10 +37,12 @@ public partial class MainWindow : Window
     private readonly HashSet<string> _customizedColumnSelections = new(StringComparer.OrdinalIgnoreCase);
     private readonly SshLogStreamService _streamService = new();
     private readonly DemoLogStreamService _demoStreamService = new();
+    private readonly UpdateCheckService _updateCheckService = new();
     private readonly DispatcherTimer _entryDrainTimer;
 
     private ProfileVault? _vault;
     private CancellationTokenSource? _streamCts;
+    private readonly CancellationTokenSource _updateCheckCts = new();
     private LogDefinition _activeLog = LogDefinition.All.First(log => log.Key == "firewall");
     private long _received;
     private long _displayed;
@@ -54,6 +57,7 @@ public partial class MainWindow : Window
         InitializeComponent();
         WindowTheme.ApplyDarkFrame(this);
         DataContext = _entries;
+        VersionText.Text = "Version " + FormatVersion(UpdateCheckService.CurrentVersion);
         ProfileCombo.ItemsSource = _profiles;
         ActiveLogCombo.ItemsSource = LogDefinition.All;
         DiagnosticsList.ItemsSource = _diagnostics;
@@ -79,10 +83,54 @@ public partial class MainWindow : Window
     private void MainWindow_Loaded(object sender, RoutedEventArgs e)
     {
         UnlockVaultOrClose();
+        if (_vault is null)
+        {
+            return;
+        }
+
         LoadProfilesIntoUi();
         RefreshLogSelection();
         RebuildColumns();
         UpdateCounters();
+        _ = CheckForUpdatesOnStartupAsync(_updateCheckCts.Token);
+    }
+
+    private async Task CheckForUpdatesOnStartupAsync(CancellationToken cancellationToken)
+    {
+        try
+        {
+            await Task.Delay(TimeSpan.FromSeconds(1.5), cancellationToken);
+
+            var update = await _updateCheckService.CheckLatestAsync(UpdateCheckService.CurrentVersion, cancellationToken);
+            if (update is null || cancellationToken.IsCancellationRequested)
+            {
+                return;
+            }
+
+            var updateWindow = new UpdateWindow(
+                UpdateCheckService.CurrentVersion,
+                update,
+                _updateCheckService,
+                cancellationToken)
+            {
+                Owner = this
+            };
+
+            if (updateWindow.ShowDialog() != true || string.IsNullOrWhiteSpace(updateWindow.DownloadedPath))
+            {
+                return;
+            }
+
+            SetStatus($"Applying update {FormatVersion(update.LatestVersion)} ...");
+            ApplyDownloadedUpdate(updateWindow.DownloadedPath);
+        }
+        catch (OperationCanceledException)
+        {
+        }
+        catch (Exception ex)
+        {
+            AddDiagnostic("Update check failed: " + ex.Message);
+        }
     }
 
     private void UnlockVaultOrClose()
@@ -1196,6 +1244,35 @@ public partial class MainWindow : Window
                 : int.MaxValue;
     }
 
+    private static string FormatVersion(Version version)
+    {
+        return version.Build >= 0
+            ? $"{version.Major}.{version.Minor}.{version.Build}"
+            : $"{version.Major}.{version.Minor}";
+    }
+
+    private static void ApplyDownloadedUpdate(string downloadedPath)
+    {
+        var targetPath = Environment.ProcessPath;
+        if (string.IsNullOrWhiteSpace(targetPath) || !File.Exists(targetPath))
+        {
+            throw new InvalidOperationException("The running application path could not be resolved.");
+        }
+
+        var updaterScript = UpdateCheckService.CreateUpdaterScript(
+            downloadedPath,
+            targetPath,
+            Environment.ProcessId);
+
+        Process.Start(new ProcessStartInfo(updaterScript)
+        {
+            UseShellExecute = true,
+            WindowStyle = ProcessWindowStyle.Hidden
+        });
+
+        Application.Current.Shutdown();
+    }
+
     private static string Truncate(string value, int maxLength)
     {
         return value.Length <= maxLength ? value : value[..maxLength] + "...";
@@ -1364,6 +1441,8 @@ public partial class MainWindow : Window
 
     private void Window_Closing(object? sender, CancelEventArgs e)
     {
+        _updateCheckCts.Cancel();
+        _updateCheckCts.Dispose();
         _streamCts?.Cancel();
         _streamService.Dispose();
         _vault?.Dispose();

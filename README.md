@@ -22,6 +22,7 @@ It is built for firewall troubleshooting when you do not want to deploy or recon
   * Local encrypted credential vault protected by a master password
   * Strict SSH mode by default with host key trust-on-first-use and fingerprint pinning
   * Appliance CPU usage display after live firewall telemetry is available
+  * Automatic update check against GitHub Releases on startup
   * Demo mode for parser, filter and UI testing without a firewall
 
 * * *
@@ -80,6 +81,8 @@ Profiles are stored locally in:
 ```
 
 The vault payload is encrypted with AES-GCM. The key is derived from the startup master password using PBKDF2-SHA256.
+
+On startup the app quietly checks the public GitHub Releases endpoint. If a newer version exists, it asks before downloading it. When confirmed, the app shows download progress, closes itself, replaces the local executable and starts the updated version.
 
 * * *
 

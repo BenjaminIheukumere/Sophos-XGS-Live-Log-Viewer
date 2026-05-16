@@ -270,7 +270,7 @@
                 <ColumnDefinition Width="*" />
             </Grid.ColumnDefinitions>
 
-                    <Border x:Name="LogSelectionPanel"
+            <Border x:Name="LogSelectionPanel"
                     Grid.Column="0"
                     BorderBrush="{StaticResource BorderBrushSoft}"
                     BorderThickness="0,0,1,0"
@@ -280,10 +280,9 @@
                         <RowDefinition Height="Auto" />
                         <RowDefinition Height="Auto" />
                         <RowDefinition Height="*" />
-                        <RowDefinition Height="Auto" />
                     </Grid.RowDefinitions>
 
-                        <TextBlock Text="LIVE LOG"
+                    <TextBlock Text="LIVE LOG"
                                FontWeight="SemiBold"
                                FontSize="14"
                                Foreground="{StaticResource AccentBrush}"
@@ -385,6 +384,13 @@
 
         <DockPanel Grid.Row="3"
                    Background="{StaticResource HeaderBrush}">
+            <TextBlock x:Name="VersionText"
+                       DockPanel.Dock="Right"
+                       Foreground="{StaticResource MutedTextBrush}"
+                       HorizontalAlignment="Right"
+                       VerticalAlignment="Center"
+                       FontSize="11"
+                       Margin="16,0,12,0" />
             <TextBlock x:Name="StatusText"
                        Foreground="{StaticResource MutedTextBrush}"
                        VerticalAlignment="Center"
