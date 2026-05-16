@@ -59,7 +59,7 @@ git clone https://github.com/BenjaminIheukumere/Sophos-XGS-Live-Log-Viewer.git
 cd Sophos-XGS-Live-Log-Viewer
 dotnet restore
 dotnet test
-dotnet publish .\SophosXgsLiveLogViewer.App\SophosXgsLiveLogViewer.App.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true
+dotnet publish .\SophosXgsLiveLogViewer.App\SophosXgsLiveLogViewer.App.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:EnableCompressionInSingleFile=false
 ```
 
 * * *

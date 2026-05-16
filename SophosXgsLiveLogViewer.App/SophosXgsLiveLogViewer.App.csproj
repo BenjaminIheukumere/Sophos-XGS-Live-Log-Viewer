@@ -8,6 +8,8 @@
     <UseWPF>true</UseWPF>
     <ApplicationIcon>Assets\AppIcon.ico</ApplicationIcon>
     <AssemblyName>Sophos XGS Live Log Viewer</AssemblyName>
+    <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
+    <EnableCompressionInSingleFile>false</EnableCompressionInSingleFile>
     <Title>Sophos XGS Live Log Viewer by Benjamin Iheukumere | Safelink IT</Title>
     <Product>Sophos XGS Live Log Viewer by Benjamin Iheukumere | Safelink IT</Product>
     <Company>Benjamin Iheukumere</Company>
