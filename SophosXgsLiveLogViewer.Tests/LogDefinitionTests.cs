@@ -62,6 +62,23 @@ public sealed class LogDefinitionTests
     }
 
     [Fact]
+    public void MatchesEvent_MapsLetsEncryptLogFile()
+    {
+        var definition = LogDefinition.Find("lets_encrypt");
+        var entry = new LogEntry
+        {
+            SourceLogFile = "/log/letsencrypt.log",
+            LogType = "File",
+            Component = "letsencrypt.log",
+            Message = "ACME certificate renewed successfully"
+        };
+
+        Assert.NotNull(definition);
+        Assert.Equal("Let's Encrypt", definition.DisplayName);
+        Assert.True(definition.MatchesEvent(entry));
+    }
+
+    [Fact]
     public void ToString_ReturnsDisplayName()
     {
         var definition = LogDefinition.Find("web_filter");

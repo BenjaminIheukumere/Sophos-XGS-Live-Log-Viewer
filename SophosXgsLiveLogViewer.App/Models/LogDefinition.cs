@@ -11,6 +11,7 @@ public sealed record LogDefinition(string Key, string DisplayName, IReadOnlyList
         new("email", "Email", ["/log/awarrensmtp.log", "/log/warren.log", "/log/smtpd_main.log", "/log/smtpd_reject.log", "/log/sasi.log"]),
         new("firewall", "Firewall", ["/log/fwlog.log", "/log/firewall_rule.log"]),
         new("ips", "IPS", ["/log/ips.log"]),
+        new("lets_encrypt", "Let's Encrypt", ["/log/letsencrypt.log"]),
         new("malware", "Malware", ["/log/avd.log", "/log/sandboxd.log"]),
         new("security_heartbeat", "Security Heartbeat", ["/log/heartbeatd.log", "/log/hbtrust.log"]),
         new("ssl_tls_inspection", "SSL/TLS inspection", ["/log/ips.log", "/log/httplogd.log"]),
@@ -55,6 +56,9 @@ public sealed record LogDefinition(string Key, string DisplayName, IReadOnlyList
             "email" => ContainsAny(type, "Email", "Anti-Spam") || ContainsAny(component, "SMTP", "IMAP", "POP", "Mail", "Anti-Spam"),
             "firewall" => Is(type, "Firewall"),
             "ips" => Is(type, "IDP") || ContainsAny(component, "IPS", "IDP", "Anomaly", "Signatures"),
+            "lets_encrypt" => ContainsAny(type, "Let's Encrypt", "Lets Encrypt", "ACME")
+                || ContainsAny(component, "Let's Encrypt", "letsencrypt", "ACME")
+                || ContainsAny(message, "Let's Encrypt", "letsencrypt", "ACME certificate"),
             "malware" => Is(type, "Anti-Virus") || ContainsAny(subtype, "Virus", "PUA") || ContainsAny(message, "Malware", "Virus"),
             "security_heartbeat" => ContainsAny(type, "Heartbeat") || ContainsAny(component, "Heartbeat") || ContainsAny(entry.RawLine, "hb_status", "hb_health"),
             "ssl_tls_inspection" => Is(type, "SSL") || ContainsAny(component, "SSL"),
@@ -90,6 +94,7 @@ public sealed record LogDefinition(string Key, string DisplayName, IReadOnlyList
             or "active_threat_response"
             or "authentication"
             or "email"
+            or "lets_encrypt"
             or "malware"
             or "security_heartbeat"
             or "system"

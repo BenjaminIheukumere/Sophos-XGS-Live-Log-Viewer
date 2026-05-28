@@ -98,6 +98,11 @@ public static class LogColumnPolicy
                 "log_component", "log_subtype", "status", "src_ip", "dst_ip", "sender",
                 "recipient", "subject", "message", "reason"
             ],
+            "lets_encrypt" =>
+            [
+                "log_component", "log_subtype", "status", "domain", "message", "reason",
+                "device_name", "log_file", "severity", "priority"
+            ],
             "malware" or "zero_day_protection" or "active_threat_response" =>
             [
                 "log_component", "log_subtype", "status", "src_ip", "dst_ip", "user_name",
