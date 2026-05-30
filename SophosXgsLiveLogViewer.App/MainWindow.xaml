@@ -15,7 +15,7 @@
             <RowDefinition Height="64" />
             <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
-            <RowDefinition Height="32" />
+            <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
 
         <Border Grid.Row="0"
@@ -383,20 +383,30 @@
             </Grid>
         </Grid>
 
-        <DockPanel Grid.Row="3"
-                   Background="{StaticResource HeaderBrush}">
+        <Grid Grid.Row="3"
+              MinHeight="32"
+              Background="{StaticResource HeaderBrush}">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+
+            <TextBlock x:Name="StatusText"
+                       Grid.Column="0"
+                       Foreground="{StaticResource MutedTextBrush}"
+                       VerticalAlignment="Center"
+                       TextWrapping="Wrap"
+                       TextTrimming="None"
+                       Margin="10,4"
+                       Text="Ready" />
+
             <TextBlock x:Name="VersionText"
-                       DockPanel.Dock="Right"
+                       Grid.Column="1"
                        Foreground="{StaticResource MutedTextBrush}"
                        HorizontalAlignment="Right"
                        VerticalAlignment="Center"
                        FontSize="11"
                        Margin="16,0,12,0" />
-            <TextBlock x:Name="StatusText"
-                       Foreground="{StaticResource MutedTextBrush}"
-                       VerticalAlignment="Center"
-                       Margin="10,0"
-                       Text="Ready" />
-        </DockPanel>
+        </Grid>
     </Grid>
 </Window>

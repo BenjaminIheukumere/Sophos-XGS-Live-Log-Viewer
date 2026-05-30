@@ -656,7 +656,7 @@ public partial class MainWindow : Window
         try
         {
             Clipboard.SetText(value);
-            SetStatus($"Copied {ColumnNameFormatter.ToDisplayName(field)}: {Truncate(value, 120)}");
+            SetStatus($"Copied {ColumnNameFormatter.ToDisplayName(field)}: {value}");
         }
         catch (ExternalException ex)
         {
