@@ -37,7 +37,16 @@ jobs:
           -p:DebugSymbols=false
           --output artifacts/win-x64
 
+      - name: Prepare release asset
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Path dist -Force | Out-Null
+          Copy-Item `
+            -LiteralPath "artifacts/win-x64/Sophos XGS Live Log Viewer.exe" `
+            -Destination "dist/Sophos-XGS-Live-Log-Viewer-${{ github.ref_name }}-win-x64.exe" `
+            -Force
+
       - name: Create release
         uses: softprops/action-gh-release@v2
         with:
-          files: artifacts/win-x64/Sophos XGS Live Log Viewer.exe
+          files: dist/Sophos-XGS-Live-Log-Viewer-${{ github.ref_name }}-win-x64.exe
