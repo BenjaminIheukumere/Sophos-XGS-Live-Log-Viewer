@@ -1,5 +1,6 @@
 using System.IO;
 using System.Net.Http;
+using System.Net.Http.Headers;
 using System.Reflection;
 using System.Security.Cryptography;
 using System.Text.Json;
@@ -36,7 +37,8 @@ public sealed class UpdateCheckService
 
     public async Task<UpdateInfo?> CheckLatestAsync(Version currentVersion, CancellationToken cancellationToken)
     {
-        using var response = await _httpClient.GetAsync(LatestReleaseUrl, cancellationToken);
+        using var request = CreateGitHubApiRequest(HttpMethod.Get, LatestReleaseUrl);
+        using var response = await _httpClient.SendAsync(request, cancellationToken);
         response.EnsureSuccessStatusCode();
 
         var json = await response.Content.ReadAsStringAsync(cancellationToken);
@@ -62,7 +64,8 @@ public sealed class UpdateCheckService
             File.Delete(tempPath);
         }
 
-        using var response = await _httpClient.GetAsync(update.DownloadUrl, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
+        using var request = CreateBinaryDownloadRequest(HttpMethod.Get, update.DownloadUrl);
+        using var response = await _httpClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
         response.EnsureSuccessStatusCode();
 
         var expectedBytes = response.Content.Headers.ContentLength.GetValueOrDefault(update.AssetSize);
@@ -165,8 +168,21 @@ exit /b 0
             Timeout = TimeSpan.FromSeconds(15)
         };
         httpClient.DefaultRequestHeaders.UserAgent.ParseAdd(UserAgent);
-        httpClient.DefaultRequestHeaders.Accept.ParseAdd("application/vnd.github+json");
         return httpClient;
+    }
+
+    internal static HttpRequestMessage CreateGitHubApiRequest(HttpMethod method, string url)
+    {
+        var request = new HttpRequestMessage(method, url);
+        request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/vnd.github+json"));
+        return request;
+    }
+
+    internal static HttpRequestMessage CreateBinaryDownloadRequest(HttpMethod method, string url)
+    {
+        var request = new HttpRequestMessage(method, url);
+        request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/octet-stream"));
+        return request;
     }
 
     private static string BuildUpdateDirectory(Version version)

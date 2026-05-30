@@ -81,6 +81,30 @@ public sealed class UpdateCheckServiceTests
     }
 
     [Fact]
+    public void CreateBinaryDownloadRequest_UsesOctetStreamAcceptHeader()
+    {
+        using var request = UpdateCheckService.CreateBinaryDownloadRequest(
+            HttpMethod.Get,
+            "https://github.com/BenjaminIheukumere/Sophos-XGS-Live-Log-Viewer/releases/download/v1.1.13/Sophos.XGS.Live.Log.Viewer.exe");
+
+        Assert.Contains(request.Headers.Accept, header =>
+            string.Equals(header.MediaType, "application/octet-stream", StringComparison.OrdinalIgnoreCase));
+        Assert.DoesNotContain(request.Headers.Accept, header =>
+            string.Equals(header.MediaType, "application/vnd.github+json", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public void CreateGitHubApiRequest_UsesGitHubJsonAcceptHeader()
+    {
+        using var request = UpdateCheckService.CreateGitHubApiRequest(
+            HttpMethod.Get,
+            "https://api.github.com/repos/BenjaminIheukumere/Sophos-XGS-Live-Log-Viewer/releases/latest");
+
+        Assert.Contains(request.Headers.Accept, header =>
+            string.Equals(header.MediaType, "application/vnd.github+json", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
     public void CreateUpdaterScript_WritesScriptForReplacingCurrentExecutable()
     {
         var directory = Path.Combine(Path.GetTempPath(), "sxlv-update-tests-" + Guid.NewGuid().ToString("N"));
