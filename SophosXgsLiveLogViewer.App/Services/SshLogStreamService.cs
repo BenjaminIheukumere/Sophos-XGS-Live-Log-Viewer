@@ -11,6 +11,8 @@ namespace SophosXgsLiveLogViewer.App.Services;
 public sealed partial class SshLogStreamService : IDisposable
 {
     private const int InitialEventRows = 100;
+    private static readonly TimeSpan LoginBannerPromptTimeout = TimeSpan.FromSeconds(2);
+    private static readonly TimeSpan LoginBannerPostAcceptDelay = TimeSpan.FromMilliseconds(300);
 
     private readonly object _sessionLock = new();
     private readonly object _stopTaskLock = new();
@@ -96,6 +98,8 @@ public sealed partial class SshLogStreamService : IDisposable
 
             using (shell)
             {
+                await AcceptOptionalLoginBannerAsync(shell, onDiagnostic, cancellationToken).ConfigureAwait(false);
+
                 shell.DataReceived += (_, args) => ProcessData(args.Data, filter, onEntry, onStatus, onDiagnostic, onCpuUsage);
 
                 if (profile.UseSophosAdvancedShell)
@@ -482,6 +486,85 @@ SXLV_START_FAST_FILE_TAILS() {
         await Task.Delay(800, cancellationToken).ConfigureAwait(false);
     }
 
+    private static async Task AcceptOptionalLoginBannerAsync(
+        ShellStream shell,
+        Action<string> onDiagnostic,
+        CancellationToken cancellationToken)
+    {
+        var promptDetected = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var buffer = new StringBuilder();
+        var accepted = 0;
+
+        EventHandler<ShellDataEventArgs>? handler = null;
+        handler = (_, args) =>
+        {
+            var text = Encoding.UTF8.GetString(args.Data);
+            lock (buffer)
+            {
+                buffer.Append(text);
+                if (buffer.Length > 4096)
+                {
+                    buffer.Remove(0, buffer.Length - 4096);
+                }
+
+                text = buffer.ToString();
+            }
+
+            if (!IsLoginBannerConfirmationPrompt(text)
+                || Interlocked.Exchange(ref accepted, 1) != 0)
+            {
+                return;
+            }
+
+            try
+            {
+                shell.WriteLine("y");
+                onDiagnostic("Accepted SSH login banner confirmation prompt.");
+                promptDetected.TrySetResult(true);
+            }
+            catch (Exception ex) when (ex is SshException or ObjectDisposedException or InvalidOperationException)
+            {
+                promptDetected.TrySetException(ex);
+            }
+        };
+
+        shell.DataReceived += handler;
+        try
+        {
+            var completed = await Task.WhenAny(
+                promptDetected.Task,
+                Task.Delay(LoginBannerPromptTimeout, cancellationToken)).ConfigureAwait(false);
+
+            cancellationToken.ThrowIfCancellationRequested();
+
+            if (ReferenceEquals(completed, promptDetected.Task)
+                && await promptDetected.Task.ConfigureAwait(false))
+            {
+                await Task.Delay(LoginBannerPostAcceptDelay, cancellationToken).ConfigureAwait(false);
+            }
+        }
+        finally
+        {
+            shell.DataReceived -= handler;
+        }
+    }
+
+    internal static bool IsLoginBannerConfirmationPrompt(string text)
+    {
+        if (string.IsNullOrWhiteSpace(text))
+        {
+            return false;
+        }
+
+        var normalized = StripAnsi(text)
+            .Replace('\r', ' ')
+            .Replace('\n', ' ')
+            .Replace('\t', ' ');
+
+        return ContainsAnyIgnoreCase(normalized, "(y/n)", "[y/n]", " y/n", "(yes/no)", "[yes/no]", "yes/no")
+            && ContainsAnyIgnoreCase(normalized, "continue", "proceed");
+    }
+
     private static string BuildSha256Fingerprint(byte[] hostKey)
     {
         var hash = SHA256.HashData(hostKey);
@@ -715,6 +798,11 @@ SXLV_START_FAST_FILE_TAILS() {
 
     internal static bool IsShellNoise(string line)
     {
+        if (IsLoginBannerConfirmationPrompt(line))
+        {
+            return true;
+        }
+
         if (!line.Contains('=')
             && (line.Contains("Select Menu", StringComparison.OrdinalIgnoreCase)
             || line.Contains("Main Menu", StringComparison.OrdinalIgnoreCase)
@@ -752,6 +840,11 @@ SXLV_START_FAST_FILE_TAILS() {
     private static string StripAnsi(string value)
     {
         return AnsiRegex().Replace(value, string.Empty);
+    }
+
+    private static bool ContainsAnyIgnoreCase(string value, params string[] needles)
+    {
+        return needles.Any(needle => value.Contains(needle, StringComparison.OrdinalIgnoreCase));
     }
 
     private void ThrowIfDisposed()

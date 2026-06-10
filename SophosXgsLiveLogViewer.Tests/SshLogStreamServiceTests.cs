@@ -28,4 +28,22 @@ public sealed class SshLogStreamServiceTests
         Assert.True(parsed);
         Assert.Equal(20, usage.TotalUsagePercent, precision: 1);
     }
+
+    [Theory]
+    [InlineData("Are you sure you want to Continue (y/n):")]
+    [InlineData("ACCESS WARNING\r\nAre you sure you want to Continue (y/n):")]
+    [InlineData("Custom banner. Do you want to proceed yes/no?")]
+    public void IsLoginBannerConfirmationPrompt_DetectsContinuePrompt(string text)
+    {
+        Assert.True(SshLogStreamService.IsLoginBannerConfirmationPrompt(text));
+    }
+
+    [Theory]
+    [InlineData("Main Menu")]
+    [InlineData("SFOS 22.0.0 GA-Build")]
+    [InlineData("Certificate renewed successfully")]
+    public void IsLoginBannerConfirmationPrompt_IgnoresNormalShellOutput(string text)
+    {
+        Assert.False(SshLogStreamService.IsLoginBannerConfirmationPrompt(text));
+    }
 }
